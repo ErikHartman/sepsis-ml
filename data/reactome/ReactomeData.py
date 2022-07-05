@@ -5,7 +5,7 @@ class ReactomeData():
     
     file1 = 'data/reactome/ReactomePathwaysRelation.txt'
     file2 = 'data/ms/proteins.csv' 
-    file3 = "data/reactome/UniProt2Reactome_All_Levels.txt"
+    file3 = "data/reactome/UniProt2Reactome.txt"
     RD = ReactomeData(file1, file2, file3)
     RD.subset_species_reactome_data('Homo sapiens')
     RD.subset_on_proteins_in_ms_data()
@@ -29,7 +29,6 @@ class ReactomeData():
     def subset_species_reactome_data(self, species = 'Homo sapiens'):
         df_species = self.reactome_df[self.reactome_df['Species'] == species]
         print(f"Number of rows of {species}: {len(df_species.index)}")
-
         self.reactome_df = df_species
         return self.reactome_df
         
@@ -37,7 +36,7 @@ class ReactomeData():
         proteins_in_ms_data = self.ms_df['Proteins'].values
         print(f'Number of reactome ids before subsetting: {len(self.reactome_df.index)}')
         self.reactome_df = self.reactome_df[self.reactome_df['UniProt_id'].isin(proteins_in_ms_data)]
-        print(f"Number of reactome ids after subsettign: {len(self.reactome_df.index)}")
+        print(f"Number of reactome ids after subsetting: {len(self.reactome_df.index)}")
         print(f"Unique proteins in reactome df: {len(list(self.reactome_df['UniProt_id'].unique()))}")
         return self.reactome_df
         
@@ -45,7 +44,7 @@ class ReactomeData():
         """
         We want this function to use the reactome idx to subset the pathway-file.
         The first step is just to find in which "parent" the reactom idx exist.
-        Thereafter we want to find which "To" exist in "parent" and iterate this step.
+        Thereafter we want to find which "child" exist in "parent" and iterate this step.
         This sounds like recursion to me!
         
         Want a function which takes list and "parent" as input and adds the parent to list.
@@ -62,8 +61,8 @@ class ReactomeData():
                 return reactome_idx_list
             else:
                 reactome_idx_list = reactome_idx_list + parent
-                subsetted_pathway = self.path_df[self.path_df['parent'].isin(parent)]
-                new_parent = list(subsetted_pathway['child'].unique())
+                subsetted_pathway = self.path_df[self.path_df['child'].isin(parent)]
+                new_parent = list(subsetted_pathway['parent'].unique())
                 print(f"Values in new_parent: {len(new_parent)}")
                 return add_pathways(counter, reactome_idx_list, new_parent)
                 
@@ -78,6 +77,13 @@ class ReactomeData():
         return self.path_df
  
  
+    def get_complete_pathway_df(self, save_path):
+        ms_reactome_data = self.reactome_df[['UniProt_id','Reactome_id']]
+        reactome_path_data = self.path_df[['parent','child']]
+        ms_reactome_data.rename(columns={'UniProt_id':'child','Reactome_id':'parent'}, inplace=True)
+        complete_pathway_df = pd.concat([ms_reactome_data, reactome_path_data])
+        complete_pathway_df.to_csv(save_path, index=False)
+        
  
     def save_df(self, df_id, save_path):
         if df_id == 'reactome':
@@ -88,22 +94,22 @@ class ReactomeData():
         
         
 if __name__ == '__main__':
-    print('--------------')
-    print('|S C I E N C E|')
-    print('--------------')
+    print(' --------------')
+    print('| S C I E N C E |')
+    print(' --------------')
     print('\( o _ o )/')
     
     
     file1 = 'data/reactome/ReactomePathwaysRelation.txt'
     file2 = 'data/ms/proteins.csv' 
-    file3 = "data/reactome/UniProt2Reactome_All_Levels.txt"
+    file3 = "data/reactome/UniProt2Reactome.txt"
     RD = ReactomeData(file1, file2, file3)
     RD.subset_species_reactome_data('Homo sapiens')
     RD.subset_on_proteins_in_ms_data()
     RD.subset_pathways_on_reactome_idx()
     RD.save_df("reactome", "data/reactome/HSA_ms_reactome.csv") 
     RD.save_df("path", "data/reactome/HSA_ms_path.csv")
-    
+    RD.get_complete_pathway_df('data/reactome/HSA_complete.csv')
     
     
     
