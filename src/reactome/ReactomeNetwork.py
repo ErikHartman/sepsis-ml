@@ -1,22 +1,14 @@
-import re
+
 import networkx as nx
 import pandas as pd
-from os.path import join
-from config_path import REACTOME_PATHWAY_PATH
+import matplotlib.pyplot as plt
+import re
 
 """ 
 Original file from https://github.com/marakeby/pnet_prostate_paper/blob/master/data/pathways/reactome.py
-
 Modified to fit our dir.
 
 """
-
-
-reactome_base_dir = REACTOME_PATHWAY_PATH
-relations_file_name = 'ReactomePathwaysRelation.txt'
-pathway_names = 'ReactomePathways.txt'
-pathway_genes = 'ReactomePathways.gmt'
-
 
 def add_edges(G, node, n_levels):
     edges = []
@@ -31,14 +23,14 @@ def add_edges(G, node, n_levels):
     return G
 
 
-def complete_network(G, n_leveles=4):
-    sub_graph = nx.ego_graph(G, 'root', radius=n_leveles)
+def complete_network(G, n_levels=4):
+    sub_graph = nx.ego_graph(G, 'root', radius=n_levels)
     terminal_nodes = [n for n, d in sub_graph.out_degree() if d == 0]
     distances = [len(nx.shortest_path(G, source='root', target=node)) for node in terminal_nodes]
     for node in terminal_nodes:
         distance = len(nx.shortest_path(sub_graph, source='root', target=node))
-        if distance <= n_leveles:
-            diff = n_leveles - distance + 1
+        if distance <= n_levels:
+            diff = n_levels - distance + 1
             sub_graph = add_edges(sub_graph, node, diff)
 
     return sub_graph
@@ -47,7 +39,6 @@ def complete_network(G, n_leveles=4):
 def get_nodes_at_level(net, distance):
     # get all nodes within distance around the query node
     nodes = set(nx.ego_graph(net, 'root', radius=distance))
-
     # remove nodes that are not **at** the specified distance but closer
     if distance >= 1.:
         nodes -= set(nx.ego_graph(net, 'root', radius=distance - 1))
@@ -67,39 +58,17 @@ def get_layers_from_net(net, n_levels):
         layers.append(dict)
     return layers
 
-
 class Reactome():
-
-    def __init__(self):
-        self.pathway_names = self.load_names()
-        self.hierarchy = self.load_hierarchy()
-        self.pathway_genes = self.load_genes()
-
-    def load_names(self):
-        filename = join(reactome_base_dir, pathway_names)
-        df = pd.read_csv(filename, sep='\t')
-        df.columns = ['reactome_id', 'pathway_name', 'species']
-        return df
-
-    def load_genes(self):
-        filename = join(reactome_base_dir, pathway_genes)
-        gmt = GMT()
-        df = gmt.load_data(filename, pathway_col=1, genes_col=3)
-        return df
-
-    def load_hierarchy(self):
-        filename = join(reactome_base_dir, relations_file_name)
-        df = pd.read_csv(filename, sep='\t')
-        df.columns = ['child', 'parent']
-        return df
-
+    def __init__(self, path_file, protein_file):
+        self.hierarchy = pd.read_csv(path_file, names=['parent','child'], sep="\t")
+        self.proteins = pd.read_csv(protein_file, names = ['UniProt_id', 'Reactome_id', 'URL', 'Description','Evidence Code','Species'], sep="\t")
 
 class ReactomeNetwork():
 
-    def __init__(self):
-        self.reactome = Reactome()  # low level access to reactome pathways and genes
+    def __init__(self,  all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome.txt"):
+        self.reactome = Reactome(all_paths_file, protein_file) 
         self.netx = self.get_reactome_networkx()
-
+        
     def get_terminals(self):
         terminal_nodes = [n for n, d in self.netx.out_degree() if d == 0]
         return terminal_nodes
@@ -116,7 +85,7 @@ class ReactomeNetwork():
         hierarchy = self.reactome.hierarchy
         # filter hierarchy to have human pathways only
         human_hierarchy = hierarchy[hierarchy['child'].str.contains('HSA')]
-        net = nx.from_pandas_edgelist(human_hierarchy, 'child', 'parent', create_using=nx.DiGraph())
+        net = nx.from_pandas_edgelist(human_hierarchy, 'parent','child', create_using=nx.DiGraph())
         net.name = 'reactome'
 
         # add root node
@@ -131,19 +100,18 @@ class ReactomeNetwork():
         return nx.info(self.netx)
 
     def get_tree(self):
-
         # convert to tree
         G = nx.bfs_tree(self.netx, 'root')
 
         return G
 
     def get_completed_network(self, n_levels):
-        G = complete_network(self.netx, n_leveles=n_levels)
+        G = complete_network(self.netx, n_levels=n_levels)
         return G
 
     def get_completed_tree(self, n_levels):
         G = self.get_tree()
-        G = complete_network(G, n_leveles=n_levels)
+        G = complete_network(G, n_levels=n_levels)
         return G
 
     def get_layers(self, n_levels, direction='root_to_leaf'):
@@ -155,19 +123,25 @@ class ReactomeNetwork():
             layers = get_layers_from_net(net, 5)
             layers = layers[5 - n_levels:5]
 
-        # get the last layer (genes level)
+        # get the last layer (protein level)
         terminal_nodes = [n for n, d in net.out_degree() if d == 0]  # set of terminal pathways
-        # we need to find genes belonging to these pathways
-        genes_df = self.reactome.pathway_genes
+        # we need to find proteins belonging to these pathways
+        protein_df = self.reactome.proteins
 
         dict = {}
         missing_pathways = []
         for p in terminal_nodes:
             pathway_name = re.sub('_copy.*', '', p)
-            genes = genes_df[genes_df['group'] == pathway_name]['gene'].unique()
-            if len(genes) == 0:
+            proteins = protein_df[protein_df['Reactome_id'] == pathway_name]['UniProt_id'].unique()
+            if len(proteins) == 0:
                 missing_pathways.append(pathway_name)
-            dict[pathway_name] = genes
+            dict[pathway_name] = proteins
 
         layers.append(dict)
         return layers
+
+
+if __name__ == '__main__':
+    RN = ReactomeNetwork()
+    print(RN.info())
+    

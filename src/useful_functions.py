@@ -42,3 +42,8 @@ def evaluate_classifier(clf, X, y, cv):
     print("F1: %0.2f with a standard deviation of %0.2f" % (f1_scores.mean(), f1_scores.std()))
     print("Recall: %0.2f accuracy with a standard deviation of %0.2f" % (recall.mean(), recall.std()))
     print("Precision: %0.2f with a standard deviation of %0.2f" % (precision.mean(), precision.std()))
+    
+    
+def save_protein_list(protein_list, save_path):
+    protein_df = pd.DataFrame(protein_list, columns=['Proteins'])
+    protein_df.to_csv(save_path, index=False)
