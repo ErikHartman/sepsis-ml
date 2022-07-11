@@ -1,7 +1,8 @@
 
 import networkx as nx
 import pandas as pd
-import matplotlib.pyplot as plt
+import itertools
+import numpy as np
 import re
 
 """ 
@@ -9,6 +10,22 @@ Original file from https://github.com/marakeby/pnet_prostate_paper/blob/master/d
 Modified to fit our dir.
 
 """
+
+
+def get_map_from_layer(layer_dict):
+    '''
+    :param layer_dict: dictionary of connections (e.g {'pathway1': ['g1', 'g2', 'g3']}
+    :return: dataframe map of layer (index = proteins, columns = pathways, , values = 1 if connected; 0 else)
+    '''
+    pathways = layer_dict.keys()
+    proteins = list(itertools.chain.from_iterable(layer_dict.values()))
+    proteins = list(np.unique(proteins))
+    df = pd.DataFrame(index=pathways, columns=proteins)
+    for k, v in layer_dict.items():
+        df.loc[k, v] = 1
+    df = df.fillna(0)
+    return df.T
+
 
 def add_edges(G, node, n_levels):
     edges = []
@@ -19,24 +36,25 @@ def add_edges(G, node, n_levels):
         source = target
         edges.append(edge)
 
-    G.add_edges_from(edges)
+    G.add_edges_from(edges) #this adds n_levels of "copies" to node.
     return G
 
 
 def complete_network(G, n_levels=4):
     sub_graph = nx.ego_graph(G, 'root', radius=n_levels)
     terminal_nodes = [n for n, d in sub_graph.out_degree() if d == 0]
-    distances = [len(nx.shortest_path(G, source='root', target=node)) for node in terminal_nodes]
     for node in terminal_nodes:
         distance = len(nx.shortest_path(sub_graph, source='root', target=node))
         if distance <= n_levels:
             diff = n_levels - distance + 1
-            sub_graph = add_edges(sub_graph, node, diff)
-
+            sub_graph = add_edges(sub_graph, node, diff) # This just adds nodes if n_levels is longer than distance. It creates node_last_copy1, node_last_copy2 etc.
+            
+    # Basically, this methods adds "copy layers" if a path is shorter than n_levels. 
     return sub_graph
 
 
 def get_nodes_at_level(net, distance):
+    # This methods just gets node at a certain distance from root.
     # get all nodes within distance around the query node
     nodes = set(nx.ego_graph(net, 'root', radius=distance))
     # remove nodes that are not **at** the specified distance but closer
@@ -49,13 +67,13 @@ def get_nodes_at_level(net, distance):
 def get_layers_from_net(net, n_levels):
     layers = []
     for i in range(n_levels):
-        nodes = get_nodes_at_level(net, i)
+        nodes = get_nodes_at_level(net, i) # returns all the nodes at a specific Level
         dict = {}
         for n in nodes:
-            n_name = re.sub('_copy.*', '', n)
-            next = net.successors(n)
-            dict[n_name] = [re.sub('_copy.*', '', nex) for nex in next]
-        layers.append(dict)
+            n_name = re.sub('_copy.*', '', n) #removes the "_copy" in the node name (see complete_network())
+            next = net.successors(n) #gets all the succesor of nodes at level
+            dict[n_name] = [re.sub('_copy.*', '', nex) for nex in next] #for each node, it adds a list of succesors
+        layers.append(dict) #this will then return a list where all layers have a dict of origin node and successors.
     return layers
 
 class Reactome():
@@ -101,17 +119,17 @@ class ReactomeNetwork():
 
     def get_tree(self):
         # convert to tree
-        G = nx.bfs_tree(self.netx, 'root')
-
+        G = nx.bfs_tree(self.netx, 'root') #breadth first to remove weird connections
+ 
         return G
 
     def get_completed_network(self, n_levels):
-        G = complete_network(self.netx, n_levels=n_levels)
+        G = complete_network(self.netx, n_levels = n_levels)
         return G
 
     def get_completed_tree(self, n_levels):
         G = self.get_tree()
-        G = complete_network(G, n_levels=n_levels)
+        G = complete_network(G, n_levels = n_levels)
         return G
 
     def get_layers(self, n_levels, direction='root_to_leaf'):
@@ -139,9 +157,23 @@ class ReactomeNetwork():
 
         layers.append(dict)
         return layers
+    
+    def get_connectivity_matrices(self, n_levels, direction = "root_to_leaf"):
+        connectivity_matrices = []
+        layers = self.get_layers(n_levels, direction)
+        for i, layer in enumerate(layers[::-1]):
+            mapp = get_map_from_layer(layer)
+            if i == 0:
+                proteins = list(mapp.index)
+            filter_df = pd.DataFrame(index=proteins)
+            all = filter_df.merge(mapp, right_index=True, left_index=True, how='inner')
+            proteins = list(mapp.columns)
+            connectivity_matrices.append(all)
+        return connectivity_matrices
 
 
 if __name__ == '__main__':
     RN = ReactomeNetwork()
-    print(RN.info())
+    
+
     
