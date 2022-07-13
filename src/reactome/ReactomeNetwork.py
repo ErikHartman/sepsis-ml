@@ -9,6 +9,7 @@ import re
 Original file from https://github.com/marakeby/pnet_prostate_paper/blob/master/data/pathways/reactome.py
 Modified to fit our dir.
 
+Also want a version where the RN is created on just a subset of proteins.
 """
 
 
@@ -83,16 +84,22 @@ class Reactome():
 
 class ReactomeNetwork():
 
-    def __init__(self,  all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome.txt"):
+    def __init__(self,  filter = False, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome.txt"):
         self.reactome = Reactome(all_paths_file, protein_file) 
+        self.filter = filter # If filter is true, the network will be created with only proteins in ms_proteins
+        self.ms_hierarchy = pd.read_csv('data/reactome/HSA_ms_path.csv')
+        self.ms_proteins = ms_proteins
         self.netx = self.get_reactome_networkx()
         
+        
+    def get_ms_proteins(self):
+        return self.ms_proteins 
+    
     def get_terminals(self):
         terminal_nodes = [n for n, d in self.netx.out_degree() if d == 0]
         return terminal_nodes
 
     def get_roots(self):
-
         roots = get_nodes_at_level(self.netx, distance=1)
         return roots
 
@@ -100,9 +107,13 @@ class ReactomeNetwork():
     def get_reactome_networkx(self):
         if hasattr(self, 'netx'):
             return self.netx
-        hierarchy = self.reactome.hierarchy
-        # filter hierarchy to have human pathways only
-        human_hierarchy = hierarchy[hierarchy['child'].str.contains('HSA')]
+        
+        if self.filter:
+            human_hierarchy = self.ms_hierarchy
+        else:
+            # filter hierarchy to have human pathways only
+            hierarchy = self.reactome.hierarchy
+            human_hierarchy = hierarchy[hierarchy['child'].str.contains('HSA')]
         net = nx.from_pandas_edgelist(human_hierarchy, 'parent','child', create_using=nx.DiGraph())
         net.name = 'reactome'
 
@@ -145,6 +156,8 @@ class ReactomeNetwork():
         terminal_nodes = [n for n, d in net.out_degree() if d == 0]  # set of terminal pathways
         # we need to find proteins belonging to these pathways
         protein_df = self.reactome.proteins
+        if self.filter:
+            protein_df = protein_df[protein_df['UniProt_id'].isin(self.ms_proteins)]
 
         dict = {}
         missing_pathways = []
@@ -173,7 +186,14 @@ class ReactomeNetwork():
 
 
 if __name__ == '__main__':
-    RN = ReactomeNetwork()
-    
+    ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+    RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
+    RN2 = ReactomeNetwork()
+    print('MS')
+    for matrix in RN.get_connectivity_matrices(n_levels=4):
+        print(matrix.shape)
+    print('All')
+    for matrix in RN2.get_connectivity_matrices(n_levels=4):
+        print(matrix.shape)
 
     

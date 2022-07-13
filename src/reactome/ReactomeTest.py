@@ -4,8 +4,8 @@ import numpy as np
 import pandas as pd
 from ReactomeNetwork import ReactomeNetwork
 
-
-reactome_net = ReactomeNetwork()
+ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+reactome_net = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
 print(reactome_net.info())
 # print('# of root nodes {} , # of terminal nodes {}'.format(len(reactome_net.get_roots()),
 #                                                            len(reactome_net.get_terminals())))
@@ -17,5 +17,4 @@ connectivity_matrices = reactome_net.get_connectivity_matrices(n_levels=5)
 for matrix in connectivity_matrices:
     print(matrix.shape)
     i,j = matrix.shape
-    print("N rows :",  i)
-    print("N columns :", j)
+    print(matrix)
