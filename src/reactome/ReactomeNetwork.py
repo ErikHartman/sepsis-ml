@@ -9,6 +9,7 @@ import re
 Original file from https://github.com/marakeby/pnet_prostate_paper/blob/master/data/pathways/reactome.py
 Modified to fit our dir.
 
+Also want a version where the RN is created on just a subset of proteins.
 """
 
 
@@ -83,28 +84,35 @@ class Reactome():
 
 class ReactomeNetwork():
 
-    def __init__(self,  all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome.txt"):
+    def __init__(self,  filter = False, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome_All_Levels.txt"):
         self.reactome = Reactome(all_paths_file, protein_file) 
+        self.filter = filter # If filter is true, the network will be created with only proteins in ms_proteins
+        self.ms_hierarchy = pd.read_csv('data/reactome/HSA_All_ms_path.csv')
+        self.ms_proteins = ms_proteins
         self.netx = self.get_reactome_networkx()
         
+    
     def get_terminals(self):
-        terminal_nodes = [n for n, d in self.netx.out_degree() if d == 0]
-        return terminal_nodes
+        return [n for n, d in self.netx.out_degree() if d == 0]
 
     def get_roots(self):
-
-        roots = get_nodes_at_level(self.netx, distance=1)
-        return roots
+        return get_nodes_at_level(self.netx, distance=1)
 
     # get a DiGraph representation of the Reactome hierarchy
     def get_reactome_networkx(self):
         if hasattr(self, 'netx'):
             return self.netx
-        hierarchy = self.reactome.hierarchy
-        # filter hierarchy to have human pathways only
-        human_hierarchy = hierarchy[hierarchy['child'].str.contains('HSA')]
+        
+        if self.filter:
+            human_hierarchy = self.ms_hierarchy
+            name = 'Filtered reactome'
+        else:
+            # filter hierarchy to have human pathways only
+            hierarchy = self.reactome.hierarchy
+            human_hierarchy = hierarchy[hierarchy['child'].str.contains('HSA')]
+            name = 'Complete reactome'
         net = nx.from_pandas_edgelist(human_hierarchy, 'parent','child', create_using=nx.DiGraph())
-        net.name = 'reactome'
+        net.name = name
 
         # add root node
         roots = [n for n, d in net.in_degree() if d == 0]
@@ -119,19 +127,15 @@ class ReactomeNetwork():
 
     def get_tree(self):
         # convert to tree
-        G = nx.bfs_tree(self.netx, 'root') #breadth first to remove weird connections
- 
-        return G
+        return nx.bfs_tree(self.netx, 'root') #breadth first to remove weird connections
 
     def get_completed_network(self, n_levels):
-        G = complete_network(self.netx, n_levels = n_levels)
-        return G
+        return complete_network(self.netx, n_levels = n_levels)
 
     def get_completed_tree(self, n_levels):
         G = self.get_tree()
-        G = complete_network(G, n_levels = n_levels)
-        return G
-
+        return complete_network(G, n_levels = n_levels)
+    
     def get_layers(self, n_levels, direction='root_to_leaf'):
         if direction == 'root_to_leaf':
             net = self.get_completed_network(n_levels)
@@ -141,11 +145,13 @@ class ReactomeNetwork():
             layers = get_layers_from_net(net, 5)
             layers = layers[5 - n_levels:5]
 
-        # get the last layer (protein level)
+
         terminal_nodes = [n for n, d in net.out_degree() if d == 0]  # set of terminal pathways
         # we need to find proteins belonging to these pathways
         protein_df = self.reactome.proteins
-
+        if self.filter:
+            protein_df = protein_df[protein_df['UniProt_id'].isin(self.ms_proteins)]
+        # this attaches proteins to the terminal nodes (i.e. last layer after we've counted from root)
         dict = {}
         missing_pathways = []
         for p in terminal_nodes:
@@ -154,7 +160,6 @@ class ReactomeNetwork():
             if len(proteins) == 0:
                 missing_pathways.append(pathway_name)
             dict[pathway_name] = proteins
-
         layers.append(dict)
         return layers
     
@@ -165,6 +170,7 @@ class ReactomeNetwork():
             mapp = get_map_from_layer(layer)
             if i == 0:
                 proteins = list(mapp.index)
+                self.ms_proteins = proteins
             filter_df = pd.DataFrame(index=proteins)
             all = filter_df.merge(mapp, right_index=True, left_index=True, how='inner')
             proteins = list(mapp.columns)
@@ -173,7 +179,14 @@ class ReactomeNetwork():
 
 
 if __name__ == '__main__':
-    RN = ReactomeNetwork()
-    
+    ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+    RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
+    RN2 = ReactomeNetwork()
+    print('MS')
+    for matrix in RN.get_connectivity_matrices(n_levels=4):
+        print(matrix.shape)
+    print('All')
+    for matrix in RN2.get_connectivity_matrices(n_levels=4):
+        print(matrix.shape)
 
     

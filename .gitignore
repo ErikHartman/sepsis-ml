@@ -1,3 +1,7 @@
 account_information.txt
 my-venv
 /src/lightning_logs
+/src/reactome/lightning_logs
+lightning_logs
+
+data/reactome/

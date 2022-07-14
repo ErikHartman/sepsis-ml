@@ -42,15 +42,8 @@ class ReactomeData():
         
     def subset_pathways_on_reactome_idx(self):
         """
-        We want this function to use the reactome idx to subset the pathway-file.
-        The first step is just to find in which "parent" the reactom idx exist.
-        Thereafter we want to find which "child" exist in "parent" and iterate this step.
-        This sounds like recursion to me!
-        
-        Want a function which takes list and "parent" as input and adds the parent to list.
-        Thereafter the function will be called with the list and "Child". 
-        
-        Base case: Child is empty. Return List.
+        Recursive method to add parents and children to pathway_df based on filtered reactome_df.
+        TODO: I need understand why this returns same path_df for All_Levels and for lowest. Maybe trivial.
         """
         def add_pathways(counter, reactome_idx_list, parent):
             counter += 1
@@ -97,7 +90,11 @@ if __name__ == '__main__':
     print(' --------------')
     print('| S C I E N C E |')
     print(' --------------')
+    print('   ^___^')
     print('\( o _ o )/')
+    print('  |     |')
+    print('  (     |')
+    print('   ||  || ')
     
     
     file1 = 'data/reactome/ReactomePathwaysRelation.txt'
@@ -109,7 +106,7 @@ if __name__ == '__main__':
     RD.subset_pathways_on_reactome_idx()
     RD.save_df("reactome", "data/reactome/HSA_ms_reactome.csv") 
     RD.save_df("path", "data/reactome/HSA_ms_path.csv")
-    RD.get_complete_pathway_df('data/reactome/HSA_complete.csv')
+    #RD.get_complete_pathway_df('data/reactome/HSA_complete.csv')
     
     
     
