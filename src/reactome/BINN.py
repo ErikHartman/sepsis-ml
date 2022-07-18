@@ -3,10 +3,10 @@ import collections
 import torch.nn as nn
 from ReactomeNetwork import ReactomeNetwork
 import torch.nn.utils.prune as prune
-from pytorch_lightning import Trainer, LightningModule, seed_everything
-from DataLoaders import MyDataModule
+from pytorch_lightning import LightningModule
+
 import torch
-import pandas as pd
+
 
 """
 Want a class that creates a neural network (Pytorch) from a ReactomeNetwork.
@@ -49,8 +49,20 @@ def generate_sequential(layer_sizes,
     return model
 
 
+def average_forward(x, layers):
+    """ 
+    TODO: Make a function which replaces forward(self, x) to get the output of every layer to play in to the final output
+    """
+    sum_x = 0
+    for l in layers:
+        x = l(x)
+        if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
+            sum_x += torch.mean(x) # something like this?
+    return sum_x
+
+
 class BINN(LightningModule):
-    def __init__(self, ms_proteins = [], learning_rate = 1e-4, sparse=False, n_layers = 4):
+    def __init__(self, ms_proteins = [], activation='tanh', learning_rate = 1e-4, sparse=False, n_layers = 4):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
@@ -65,16 +77,18 @@ class BINN(LightningModule):
             layer_sizes.append(i)
             self.column_names.append(matrix.index)
         if sparse:
-            self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices)
+            self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation)
         else:
-            self.layers = generate_sequential(layer_sizes)    
+            self.layers = generate_sequential(layer_sizes, activation=activation)    
         self.init_weights(self.layers)   
         self.loss = nn.CrossEntropyLoss() 
         self.learning_rate = learning_rate 
     
     def forward(self, x):
-        return self.layers(x) 
-    
+        #return self.layers(x) 
+        return average_forward(x, self.layers)
+        
+        
     def training_step(self, batch, batch_nb):
         x, y = batch
         y_hat = self(x)
@@ -121,14 +135,3 @@ class BINN(LightningModule):
     def calculate_accuracy(self, y, prediction):
         return torch.sum(y == prediction).item() / (float(len(y)))
         
-        
-if __name__ == '__main__':
-    ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
-    model = BINN(sparse=True, ms_proteins=ms_proteins)
-    RN_proteins = model.RN.ms_proteins
-    model.report_layer_structure()
-    dataloader = MyDataModule(val_size = 0.2, RN_proteins = RN_proteins)
-    seed_everything(42, workers=True)
-    trainer = Trainer(deterministic=True, max_epochs=50)
-    trainer.fit(model, dataloader)
-    trainer.validate(model, dataloader)

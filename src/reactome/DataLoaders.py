@@ -64,7 +64,6 @@ class MyDataModule(LightningDataModule):
         super().__init__()
         protein_matrix = generate_protein_matrix(data_dir)
         protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
-        print(protein_matrix)
         self.X, self.y = generate_data(protein_matrix, data_dir, scale)
         self.val_size = val_size
 
