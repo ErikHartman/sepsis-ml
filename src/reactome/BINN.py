@@ -35,14 +35,14 @@ def generate_sequential(layer_sizes,
         
     layers = []
     for n in range(len(layer_sizes)-1):
-        linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1])
+        linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=False)
         layers.append((f"Layer {n}", linear_layer))
         if connectivity_matrices is not None:
             # Masking matrix
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
         else:
             # If not pruning do dropout instead.
-            layers.append((f"Droupout {n}", nn.Dropout(0.25)))
+            layers.append((f"Droupout {n}", nn.Dropout(0.5)))
         append_activation(layers, activation)
     layers.append(("Output layer", nn.Linear(layer_sizes[-1],2))) # Output layer
     model = nn.Sequential(collections.OrderedDict(layers))
@@ -60,7 +60,8 @@ def average_forward(x, layers):
             sum_x += torch.mean(x) # something like this?
     return sum_x
 
-
+ 
+# TODO: Don't know if necessary but might want to adapt loss function so that later layers are weighted.
 class BINN(LightningModule):
     def __init__(self, ms_proteins = [], activation='tanh', learning_rate = 1e-4, sparse=False, n_layers = 4):
         super().__init__()
@@ -85,8 +86,8 @@ class BINN(LightningModule):
         self.learning_rate = learning_rate 
     
     def forward(self, x):
-        #return self.layers(x) 
-        return average_forward(x, self.layers)
+        return self.layers(x) 
+        #return average_forward(x, self.layers)
         
         
     def training_step(self, batch, batch_nb):
@@ -117,7 +118,7 @@ class BINN(LightningModule):
                 print(f"Total number of elements: {torch.numel(l.weight)}")
                 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=0.00001)
         scheduler = {"scheduler": 
                      torch.optim.lr_scheduler.ReduceLROnPlateau(
                         optimizer, patience=5, 

@@ -33,12 +33,12 @@ if __name__ == '__main__':
     RN_proteins = model.RN.ms_proteins
     
     model.report_layer_structure()
-    weight_heatmap(model.layers, 'before_training', column_names=columns)
+    #weight_heatmap(model.layers, 'before_training', column_names=columns)
     
-    dataloader = MyDataModule(val_size = 0.2, RN_proteins = RN_proteins)
-    trainer = Trainer(max_epochs=10)
+    dataloader = MyDataModule(val_size = 0.2, RN_proteins = RN_proteins, scale=True)
+    trainer = Trainer( max_epochs=40)
 
 
     trainer.fit(model, dataloader)
-    weight_heatmap(model.layers, 'after_training', column_names =columns)
-    #trainer.validate(model, dataloader)
+    #weight_heatmap(model.layers, 'after_training', column_names =columns)
+    trainer.validate(model, dataloader)

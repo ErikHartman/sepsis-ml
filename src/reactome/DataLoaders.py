@@ -5,6 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import KFold
 from dpks.quant_matrix import QuantMatrix
 import torch
 
@@ -83,3 +84,47 @@ class MyDataModule(LightningDataModule):
         return DataLoader(self.val)
 
 
+
+class KFoldDataModule(LightningDataModule):
+    def __init__(
+            self,
+            data_dir = "data/ms",
+            scale=False,
+            RN_proteins = [],
+            k: int = 1,  # fold number
+            split_seed: int = 42,  # split needs to be always the same for correct cross validation
+            num_folds: int = 10,
+            num_workers: int = 10,
+        ):
+        super().__init__()
+        protein_matrix = generate_protein_matrix(data_dir)
+        protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
+        self.X, self.y = generate_data(protein_matrix, data_dir, scale)
+        self.k = k
+        self.split_seed = split_seed
+        self.num_folds = num_folds
+        self.num_workers = num_workers
+        self.data_train = None
+        self.data_val = None
+
+    def setup(self, stage = None):
+        if not self.data_train and not self.data_val:
+            # choose fold to train on
+            kf = KFold(n_splits=self.num_folds, shuffle=True, random_state=self.split_seed)
+            all_splits = [k for k in kf.split(self.X)]
+            print("Fold: ", self.k)
+            train_indexes, val_indexes = all_splits[self.k]
+            print("Val indexes: ", val_indexes)
+            train_indexes, val_indexes = train_indexes.astype(int), val_indexes.astype(int)
+            X_train = self.X[train_indexes]
+            X_val = self.X[val_indexes]
+            y_train = [self.y[i] for i in train_indexes]
+            y_val = [self.y[i] for i in val_indexes]
+            self.data_train = torch.utils.data.TensorDataset(torch.Tensor(X_train), torch.LongTensor(y_train))
+            self.data_val = torch.utils.data.TensorDataset(torch.Tensor(X_val), torch.LongTensor(y_val))
+
+    def train_dataloader(self):
+        return torch.utils.data.DataLoader(dataset=self.data_train, num_workers=self.num_workers)
+
+    def val_dataloader(self):
+        return torch.utils.data.DataLoader(dataset=self.data_val, num_workers=self.num_workers)
