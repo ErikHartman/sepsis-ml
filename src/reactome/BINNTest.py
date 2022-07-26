@@ -1,20 +1,21 @@
 
 from pytorch_lightning import Trainer
-from DataLoaders import MyDataModule
-from BINN import BINN
+from DataLoaders import MyDataModule, KFoldDataModule, generate_protein_matrix, generate_data, fit_protein_matrix_to_network_input
+from BINN import BINN, init_weights
 import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-def weight_heatmap(layers, file_name, column_names=None):
+def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = False):
     layer_weights = []
     for l in layers:
         if isinstance(l, nn.Linear):
             df = pd.DataFrame(l.weight.detach().numpy())
             layer_weights.append(df)
-    
+  
     for i, layer in enumerate(layer_weights):
+        if only_last and i < len(layer_weights)-1: continue
         if column_names:
             layer.columns = column_names[i] 
             if i < len(layer_weights)-1:
@@ -22,23 +23,43 @@ def weight_heatmap(layers, file_name, column_names=None):
         plt.figure(figsize=(20,20))
         sns.heatmap(layer.T, center=0.00, cmap='vlag')
         plt.gca().set_aspect('equal')
-        plt.savefig(f'plots/weight_maps/{file_name}_{i}.jpg', dpi=200)
+        print("Creating weight-heatmap...")
+        plt.savefig(f'plots/weight_maps/{file_name}_layer={i}_k={k}.jpg', dpi=200)
         plt.clf()
+
+    
+def k_fold(model :  BINN,  k_folds= 4, scale=True):
+    columns = model.column_names
+    RN_proteins = model.RN.ms_proteins
+    model.report_layer_structure()
+    protein_matrix = generate_protein_matrix('data/ms')
+    protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
+    X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
+
+    for k in range(k_folds):
+        model.apply(init_weights) # reset weights. No biases in network
+        dataloader = KFoldDataModule(X,y, k=k, num_folds=k_folds)
+        trainer = Trainer(max_epochs=40)
+        trainer.fit(model, dataloader)
+        weight_heatmap(model.layers, 'after_training_test', column_names =columns, k = k, only_last=True)
+        trainer.validate(model, dataloader)
         
+        
+def simple_run(model : BINN, val_size = 0.3, scale=True):
+    columns = model.column_names
+    RN_proteins = model.RN.ms_proteins
+    model.report_layer_structure()
+    #weight_heatmap(model.layers, 'before_training', column_names=columns)
+    dataloader = MyDataModule(val_size = val_size, RN_proteins = RN_proteins, scale=scale)
+    trainer = Trainer( max_epochs=40)
+    trainer.fit(model, dataloader)
+    #weight_heatmap(model.layers, 'after_training_test', column_names =columns)
+    trainer.validate(model, dataloader)
         
 if __name__ == '__main__':
     ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
-    model = BINN(sparse=True, learning_rate = 0.01, ms_proteins=ms_proteins, activation='tanh')
-    columns = model.column_names
-    RN_proteins = model.RN.ms_proteins
-    
-    model.report_layer_structure()
-    #weight_heatmap(model.layers, 'before_training', column_names=columns)
-    
-    dataloader = MyDataModule(val_size = 0.2, RN_proteins = RN_proteins, scale=True)
-    trainer = Trainer( max_epochs=40)
+    model = BINN(sparse=True, learning_rate = 0.001, ms_proteins=ms_proteins, activation='tanh', residual_forward=False)
+    #k_fold(model)
+    simple_run(model)
 
-
-    trainer.fit(model, dataloader)
-    #weight_heatmap(model.layers, 'after_training', column_names =columns)
-    trainer.validate(model, dataloader)
+    

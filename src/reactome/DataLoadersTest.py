@@ -7,5 +7,6 @@ RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
 conn_mat = RN.get_connectivity_matrices(n_levels=5)[0]
 proteins = conn_mat.index.values
 protein_matrix = generate_protein_matrix()
+print(protein_matrix)
 protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, proteins)
 

@@ -4,7 +4,6 @@ import torch.nn as nn
 from ReactomeNetwork import ReactomeNetwork
 import torch.nn.utils.prune as prune
 from pytorch_lightning import LightningModule
-
 import torch
 
 
@@ -14,9 +13,6 @@ I figured the main output from the ReactomeNetwork should be the layer connectiv
 These matrices would be multiplied with the dense layers to get a sparse nn.
 The sizes of the neural network is also defined by the sizes of the matrices.
 
-THIS IS A MASKING LAYER IN PYTORCH: 
-prune.custom_from_mask(
-      linLayer, name='weight', mask=torch.tensor(mask))
 """
 
 def generate_sequential(layer_sizes, 
@@ -40,30 +36,38 @@ def generate_sequential(layer_sizes,
         if connectivity_matrices is not None:
             # Masking matrix
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
+            
         else:
             # If not pruning do dropout instead.
-            layers.append((f"Droupout {n}", nn.Dropout(0.5)))
+            layers.append((f"Dropout {n}", nn.Dropout(0.5)))
         append_activation(layers, activation)
-    layers.append(("Output layer", nn.Linear(layer_sizes[-1],2))) # Output layer
+    layers.append(("Output layer", nn.Linear(layer_sizes[-1],2, bias=False))) # Output layer
     model = nn.Sequential(collections.OrderedDict(layers))
     return model
 
 
-def average_forward(x, layers):
-    """ 
-    TODO: Make a function which replaces forward(self, x) to get the output of every layer to play in to the final output
-    """
-    sum_x = 0
+def residual_forward(x, layers):
+    out_layer = nn.LazyLinear(2)
+    r = out_layer(x)
     for l in layers:
-        x = l(x)
+        if isinstance(l, nn.Linear):
+            x = l(x) # linear 
         if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
-            sum_x += torch.mean(x) # something like this?
-    return sum_x
+            x = l(x) # activation
+        out_layer = nn.LazyLinear(2)
+        r += out_layer(x)
+    return r
 
  
 # TODO: Don't know if necessary but might want to adapt loss function so that later layers are weighted.
 class BINN(LightningModule):
-    def __init__(self, ms_proteins = [], activation='tanh', learning_rate = 1e-4, sparse=False, n_layers = 4):
+    def __init__(self, 
+                 ms_proteins = [], 
+                 activation='tanh', 
+                 learning_rate = 1e-4, 
+                 sparse=False, 
+                 n_layers = 4, 
+                 residual_forward=False):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
@@ -81,13 +85,16 @@ class BINN(LightningModule):
             self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation)
         else:
             self.layers = generate_sequential(layer_sizes, activation=activation)    
-        self.init_weights(self.layers)   
+        init_weights(self.layers)   
         self.loss = nn.CrossEntropyLoss() 
         self.learning_rate = learning_rate 
+        self.res_forward = residual_forward
     
     def forward(self, x):
-        return self.layers(x) 
-        #return average_forward(x, self.layers)
+        if self.res_forward:
+            return residual_forward(x, self.layers)
+        else:
+            return self.layers(x) 
         
         
     def training_step(self, batch, batch_nb):
@@ -118,7 +125,7 @@ class BINN(LightningModule):
                 print(f"Total number of elements: {torch.numel(l.weight)}")
                 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=0.00001)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
         scheduler = {"scheduler": 
                      torch.optim.lr_scheduler.ReduceLROnPlateau(
                         optimizer, patience=5, 
@@ -126,13 +133,12 @@ class BINN(LightningModule):
                         mode='min', verbose=True),
                     "interval": "epoch",
                     "monitor": "val_loss"}
-        #scheduler = {"scheduler": torch.optim.lr_scheduler.StepLR(optimizer, step_size=50, gamma=0.1, verbose=True)}
+        #scheduler = {"scheduler": torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1, verbose=True)}
         return [optimizer], [scheduler]
     
-    def init_weights(self,m):
-        if type(m) == nn.Linear:
-            torch.nn.init.xavier_uniform(m.weight)
-        
     def calculate_accuracy(self, y, prediction):
         return torch.sum(y == prediction).item() / (float(len(y)))
         
+def init_weights(m):
+    if type(m) == nn.Linear:
+        torch.nn.init.xavier_uniform(m.weight)

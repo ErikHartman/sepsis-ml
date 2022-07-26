@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import preprocessing
 import pandas as pd
 import numpy as np
-from sklearn.model_selection import KFold
+from sklearn.model_selection import StratifiedKFold
 from dpks.quant_matrix import QuantMatrix
 import torch
 
@@ -28,6 +28,9 @@ def generate_protein_matrix(MS_DATA_PATH = "data/ms"):
         min_samples_per_group = 2, 
         level='protein',
     ).to_df()
+    
+    # proteins = df['Protein']
+    # proteins.to_csv('data/ms/proteins.csv', index=False)
     return df
 
 def fit_protein_matrix_to_network_input(protein_matrix, RN_proteins):
@@ -88,18 +91,16 @@ class MyDataModule(LightningDataModule):
 class KFoldDataModule(LightningDataModule):
     def __init__(
             self,
-            data_dir = "data/ms",
-            scale=False,
-            RN_proteins = [],
+            X, 
+            y,
             k: int = 1,  # fold number
             split_seed: int = 42,  # split needs to be always the same for correct cross validation
             num_folds: int = 10,
-            num_workers: int = 10,
+            num_workers: int = 12,
         ):
         super().__init__()
-        protein_matrix = generate_protein_matrix(data_dir)
-        protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
-        self.X, self.y = generate_data(protein_matrix, data_dir, scale)
+        self.X = X
+        self.y = y
         self.k = k
         self.split_seed = split_seed
         self.num_folds = num_folds
@@ -110,16 +111,17 @@ class KFoldDataModule(LightningDataModule):
     def setup(self, stage = None):
         if not self.data_train and not self.data_val:
             # choose fold to train on
-            kf = KFold(n_splits=self.num_folds, shuffle=True, random_state=self.split_seed)
-            all_splits = [k for k in kf.split(self.X)]
+            kf = StratifiedKFold(n_splits=self.num_folds, shuffle=True, random_state=self.split_seed)
+            all_splits = [k for k in kf.split(self.X, self.y)]
             print("Fold: ", self.k)
             train_indexes, val_indexes = all_splits[self.k]
-            print("Val indexes: ", val_indexes)
             train_indexes, val_indexes = train_indexes.astype(int), val_indexes.astype(int)
             X_train = self.X[train_indexes]
             X_val = self.X[val_indexes]
             y_train = [self.y[i] for i in train_indexes]
             y_val = [self.y[i] for i in val_indexes]
+            print('Fraction class 1 in y_val: ', frac_i(y_val, 1))
+            print('Validation indexes:' , val_indexes)
             self.data_train = torch.utils.data.TensorDataset(torch.Tensor(X_train), torch.LongTensor(y_train))
             self.data_val = torch.utils.data.TensorDataset(torch.Tensor(X_val), torch.LongTensor(y_val))
 
@@ -128,3 +130,11 @@ class KFoldDataModule(LightningDataModule):
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(dataset=self.data_val, num_workers=self.num_workers)
+
+def frac_i(l, i):
+    nr_el = len(l)
+    sum_i=  0
+    for el in l:
+        if el == i:
+            sum_i += 1
+    return sum_i/nr_el
