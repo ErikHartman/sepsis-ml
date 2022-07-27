@@ -30,13 +30,14 @@ def residual_forward(x, layers):
         if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
             x = l(x) # activation
         out_layer = nn.LazyLinear(2)
-        print('r2', out_layer(x))
-        r += out_layer(x)
+        r2 = out_layer(x)
+        sig = nn.Sigmoid()
+        r += sig(r2)
         print('r', r)
     # In vision this is solved by convolution, but I don't think it makes sense in our case (since neighbors aren't related).
     return r
-
+bn = nn.BatchNorm1d(64)
 input = random.rand(843)
 input = torch.tensor(input).float()
-r = residual_forward(input, layers)
-print(r)
+out = layers(input)
+print(out)

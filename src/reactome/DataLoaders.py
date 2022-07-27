@@ -64,12 +64,20 @@ def generate_data(protein_matrix, MS_DATA_PATH, scale=False):
     
 class MyDataModule(LightningDataModule):
     """ Simple LightningDataModule"""
-    def __init__(self,  val_size, data_dir = "data/ms", RN_proteins = [], scale=False):
+    def __init__(self,  
+                 val_size, 
+                 data_dir = "data/ms",
+                 RN_proteins = [], 
+                 scale=False, 
+                 batch_size=8,
+                 num_workers = 12):
         super().__init__()
         protein_matrix = generate_protein_matrix(data_dir)
         protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
         self.X, self.y = generate_data(protein_matrix, data_dir, scale)
         self.val_size = val_size
+        self.batch_size = batch_size
+        self.num_workers = num_workers
 
     def setup(self, stage = None):
         X_train, X_val, y_train, y_val = train_test_split(self.X, self.y, test_size=self.val_size)
@@ -81,10 +89,10 @@ class MyDataModule(LightningDataModule):
         self.val = torch.utils.data.TensorDataset(X_val, y_val)       
 
     def train_dataloader(self):
-        return DataLoader(self.train)
+        return DataLoader(self.train, num_workers = self.num_workers, batch_size=self.batch_size)
 
     def val_dataloader(self):
-        return DataLoader(self.val)
+        return DataLoader(self.val, num_workers = self.num_workers, batch_size= self.batch_size)
 
 
 
@@ -97,6 +105,7 @@ class KFoldDataModule(LightningDataModule):
             split_seed: int = 42,  # split needs to be always the same for correct cross validation
             num_folds: int = 10,
             num_workers: int = 12,
+            batch_size: int = 8
         ):
         super().__init__()
         self.X = X
@@ -107,6 +116,7 @@ class KFoldDataModule(LightningDataModule):
         self.num_workers = num_workers
         self.data_train = None
         self.data_val = None
+        self.batch_size = batch_size
 
     def setup(self, stage = None):
         if not self.data_train and not self.data_val:
@@ -126,10 +136,10 @@ class KFoldDataModule(LightningDataModule):
             self.data_val = torch.utils.data.TensorDataset(torch.Tensor(X_val), torch.LongTensor(y_val))
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(dataset=self.data_train, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(dataset=self.data_train, batch_size = self.batch_size, num_workers=self.num_workers)
 
     def val_dataloader(self):
-        return torch.utils.data.DataLoader(dataset=self.data_val, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(dataset=self.data_val, batch_size = self.batch_size, num_workers=self.num_workers)
 
 def frac_i(l, i):
     nr_el = len(l)

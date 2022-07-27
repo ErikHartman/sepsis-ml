@@ -32,11 +32,11 @@ def generate_sequential(layer_sizes,
     layers = []
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=False)
-        layers.append((f"Layer {n}", linear_layer))
+        layers.append((f"Layer {n}", linear_layer)) # linear layer 
+        layers.append((f"BatchNorm {n}", nn.BatchNorm1d(layer_sizes[n+1]))),
         if connectivity_matrices is not None:
             # Masking matrix
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
-            
         else:
             # If not pruning do dropout instead.
             layers.append((f"Dropout {n}", nn.Dropout(0.5)))
@@ -55,7 +55,9 @@ def residual_forward(x, layers):
         if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
             x = l(x) # activation
         out_layer = nn.LazyLinear(2)
-        r += out_layer(x)
+        r2 = out_layer(x)
+        sig = nn.Sigmoid()
+        r += sig(r2)
     return r
 
  
@@ -67,7 +69,8 @@ class BINN(LightningModule):
                  learning_rate = 1e-4, 
                  sparse=False, 
                  n_layers = 4, 
-                 residual_forward=False):
+                 residual_forward=False,
+                 scheduler='plateau'):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
@@ -88,6 +91,7 @@ class BINN(LightningModule):
         init_weights(self.layers)   
         self.loss = nn.CrossEntropyLoss() 
         self.learning_rate = learning_rate 
+        self.scheduler = scheduler
         self.res_forward = residual_forward
     
     def forward(self, x):
@@ -126,14 +130,16 @@ class BINN(LightningModule):
                 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
-        scheduler = {"scheduler": 
-                     torch.optim.lr_scheduler.ReduceLROnPlateau(
-                        optimizer, patience=5, 
-                        threshold=0.00001, 
-                        mode='min', verbose=True),
-                    "interval": "epoch",
-                    "monitor": "val_loss"}
-        #scheduler = {"scheduler": torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1, verbose=True)}
+        if self.scheduler == 'plateau':
+            scheduler = {"scheduler": 
+                        torch.optim.lr_scheduler.ReduceLROnPlateau(
+                            optimizer, patience=5, 
+                            threshold=0.00001, 
+                            mode='min', verbose=True),
+                        "interval": "epoch",
+                        "monitor": "val_loss"}
+        elif self.scheduler == 'step':
+            scheduler = {"scheduler": torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1, verbose=True)}
         return [optimizer], [scheduler]
     
     def calculate_accuracy(self, y, prediction):
