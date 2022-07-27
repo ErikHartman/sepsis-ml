@@ -89,7 +89,7 @@ class MyDataModule(LightningDataModule):
         self.val = torch.utils.data.TensorDataset(X_val, y_val)       
 
     def train_dataloader(self):
-        return DataLoader(self.train, num_workers = self.num_workers, batch_size=self.batch_size)
+        return DataLoader(self.train, num_workers = self.num_workers, batch_size=self.batch_size, shuffle=True)
 
     def val_dataloader(self):
         return DataLoader(self.val, num_workers = self.num_workers, batch_size= self.batch_size)
@@ -136,7 +136,7 @@ class KFoldDataModule(LightningDataModule):
             self.data_val = torch.utils.data.TensorDataset(torch.Tensor(X_val), torch.LongTensor(y_val))
 
     def train_dataloader(self):
-        return torch.utils.data.DataLoader(dataset=self.data_train, batch_size = self.batch_size, num_workers=self.num_workers)
+        return torch.utils.data.DataLoader(dataset=self.data_train, batch_size = self.batch_size, num_workers=self.num_workers, shuffle=True)
 
     def val_dataloader(self):
         return torch.utils.data.DataLoader(dataset=self.data_val, batch_size = self.batch_size, num_workers=self.num_workers)

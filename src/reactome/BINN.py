@@ -33,10 +33,11 @@ def generate_sequential(layer_sizes,
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=False)
         layers.append((f"Layer {n}", linear_layer)) # linear layer 
-        layers.append((f"BatchNorm {n}", nn.BatchNorm1d(layer_sizes[n+1]))),
+        layers.append((f"BatchNorm {n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
         if connectivity_matrices is not None:
             # Masking matrix
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
+            layers.append((f"Dropout {n}", nn.Dropout(0.1)))
         else:
             # If not pruning do dropout instead.
             layers.append((f"Dropout {n}", nn.Dropout(0.5)))
@@ -46,18 +47,18 @@ def generate_sequential(layer_sizes,
     return model
 
 
+# The residual forward is trash
 def residual_forward(x, layers):
     out_layer = nn.LazyLinear(2)
     r = out_layer(x)
     for l in layers:
         if isinstance(l, nn.Linear):
             x = l(x) # linear 
-        if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
-            x = l(x) # activation
         out_layer = nn.LazyLinear(2)
         r2 = out_layer(x)
-        sig = nn.Sigmoid()
-        r += sig(r2)
+        r += r2
+        if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
+            x = l(x) # activation
     return r
 
  
@@ -129,12 +130,12 @@ class BINN(LightningModule):
                 print(f"Total number of elements: {torch.numel(l.weight)}")
                 
     def configure_optimizers(self):
-        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-4)
+        optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-3)
         if self.scheduler == 'plateau':
             scheduler = {"scheduler": 
                         torch.optim.lr_scheduler.ReduceLROnPlateau(
-                            optimizer, patience=5, 
-                            threshold=0.00001, 
+                            optimizer, patience=10, 
+                            threshold = 0.00001, 
                             mode='min', verbose=True),
                         "interval": "epoch",
                         "monitor": "val_loss"}

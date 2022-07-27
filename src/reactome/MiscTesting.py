@@ -21,22 +21,23 @@ layers= nn.Sequential(
 
 def residual_forward(x, layers):
     out_layer = nn.LazyLinear(2)
+    out_act = nn.Tanh()
     r = out_layer(x)
-
-    print('r1 ', r)
+    r = out_act(r) # output from first layer
     for l in layers:
         if isinstance(l, nn.Linear):
             x = l(x) # linear 
+        if isinstance(l, nn.BatchNorm1d):
+            x = l(x)
         if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
             x = l(x) # activation
         out_layer = nn.LazyLinear(2)
         r2 = out_layer(x)
-        sig = nn.Sigmoid()
-        r += sig(r2)
-        print('r', r)
-    # In vision this is solved by convolution, but I don't think it makes sense in our case (since neighbors aren't related).
+        out_act = nn.Tanh()
+        r += out_act(r2)
     return r
-bn = nn.BatchNorm1d(64)
+
+
 input = random.rand(843)
 input = torch.tensor(input).float()
 out = layers(input)
