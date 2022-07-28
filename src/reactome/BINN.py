@@ -7,14 +7,6 @@ from pytorch_lightning import LightningModule
 import torch
 
 
-"""
-Want a class that creates a neural network (Pytorch) from a ReactomeNetwork.
-I figured the main output from the ReactomeNetwork should be the layer connectivity matrices.
-These matrices would be multiplied with the dense layers to get a sparse nn.
-The sizes of the neural network is also defined by the sizes of the matrices.
-
-"""
-
 def generate_sequential(layer_sizes, 
                         connectivity_matrices = None, 
                         activation='tanh'):
@@ -32,15 +24,15 @@ def generate_sequential(layer_sizes,
     layers = []
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=False)
-        layers.append((f"Layer {n}", linear_layer)) # linear layer 
-        layers.append((f"BatchNorm {n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
+        layers.append((f"Layer_{n}", linear_layer)) # linear layer 
+        layers.append((f"BatchNorm_{n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
         if connectivity_matrices is not None:
             # Masking matrix
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
-            layers.append((f"Dropout {n}", nn.Dropout(0.1)))
+            layers.append((f"Dropout_{n}", nn.Dropout(0.1)))
         else:
             # If not pruning do dropout instead.
-            layers.append((f"Dropout {n}", nn.Dropout(0.5)))
+            layers.append((f"Dropout_{n}", nn.Dropout(0.5)))
         append_activation(layers, activation)
     layers.append(("Output layer", nn.Linear(layer_sizes[-1],2, bias=False))) # Output layer
     model = nn.Sequential(collections.OrderedDict(layers))
@@ -65,13 +57,13 @@ def residual_forward(x, layers):
 # TODO: Don't know if necessary but might want to adapt loss function so that later layers are weighted.
 class BINN(LightningModule):
     def __init__(self, 
-                 ms_proteins = [], 
-                 activation='tanh', 
-                 learning_rate = 1e-4, 
-                 sparse=False, 
-                 n_layers = 4, 
-                 residual_forward=False,
-                 scheduler='plateau'):
+                 ms_proteins : list = [], 
+                 activation : str = 'tanh', 
+                 learning_rate : float = 1e-4, 
+                 sparse : bool = False, 
+                 n_layers : int = 4, 
+                 residual_forward :bool = False,
+                 scheduler : str = 'plateau'):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
@@ -94,6 +86,7 @@ class BINN(LightningModule):
         self.learning_rate = learning_rate 
         self.scheduler = scheduler
         self.res_forward = residual_forward
+        self.save_hyperparameters()
     
     def forward(self, x):
         if self.res_forward:

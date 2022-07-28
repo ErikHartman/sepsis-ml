@@ -65,12 +65,12 @@ def generate_data(protein_matrix, MS_DATA_PATH, scale=False):
 class MyDataModule(LightningDataModule):
     """ Simple LightningDataModule"""
     def __init__(self,  
-                 val_size, 
-                 data_dir = "data/ms",
-                 RN_proteins = [], 
-                 scale=False, 
-                 batch_size=8,
-                 num_workers = 12):
+                 val_size : int = 0.3, 
+                 data_dir : str  = "data/ms",
+                 RN_proteins : list = [], 
+                 scale : bool = False, 
+                 batch_size : int = 8,
+                 num_workers: int = 12):
         super().__init__()
         protein_matrix = generate_protein_matrix(data_dir)
         protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
