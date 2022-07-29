@@ -19,7 +19,7 @@ X,y = generate_data(protein_matrix, 'data/ms', scale = True)
 layer = 2
 to_explain = X[1:3]
 e = shap.GradientExplainer(model, X)
-shap_values,indexes = e.shap_values(to_explain, ranked_outputs=2, nsamples=200)
+shap_values,indexes = e.shap_values(to_explain, ranked_outputs=2, nsamples = len(to_explain))
 
 
 """

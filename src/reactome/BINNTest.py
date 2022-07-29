@@ -1,13 +1,13 @@
 
 from pytorch_lightning import Trainer
 from DataLoaders import MyDataModule, KFoldDataModule, generate_protein_matrix, generate_data, fit_protein_matrix_to_network_input
-from BINN import BINN, init_weights
+from BINN import BINN,  reset_weights
+from Loggers import SuperLogger
 import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import seaborn as sns
 
-## TODO: Look at stochastic weight averaging
 
 def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = False):
     layer_weights = []
@@ -31,30 +31,30 @@ def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = Fals
 
     
 def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100):
-    columns = model.column_names
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
     protein_matrix = generate_protein_matrix('data/ms')
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
     for k in range(k_folds):
-        model.apply(init_weights) # reset weights. No biases in network
+    
+        model.apply(reset_weights) # reset weights. No biases in network
         dataloader = KFoldDataModule(X,y, k=k, num_folds=k_folds, batch_size = 32)
-        trainer = Trainer(max_epochs=epochs)
+        trainer = Trainer( max_epochs=epochs)
         trainer.fit(model, dataloader)
-        #weight_heatmap(model.layers, 'after_training_BN', column_names =columns, k = k, only_last=True)
+        #weight_heatmap(model.layers, 'after_training_BN', column_names =model.column_names, k = k, only_last=True)
         trainer.validate(model, dataloader)
         
         
-def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100):
-    columns = model.column_names
+def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100, log_name = ''):
+    logger = SuperLogger(log_name, tensorboard = True, csv =  True)
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
-    #weight_heatmap(model.layers, 'before_training', column_names=columns)
+    #weight_heatmap(model.layers, 'before_training', column_names= model.column_names)
     dataloader = MyDataModule(val_size = val_size, RN_proteins = RN_proteins, scale=scale, batch_size=32)
-    trainer = Trainer( max_epochs=epochs)
+    trainer = Trainer(logger = logger.get_logger_list(), max_epochs=epochs)
     trainer.fit(model, dataloader)
-    #weight_heatmap(model.layers, 'after_training_BN', column_names =columns)
+    #weight_heatmap(model.layers, 'after_training_BN', column_names = model.column_names)
     trainer.validate(model, dataloader)
         
 if __name__ == '__main__':
@@ -66,6 +66,6 @@ if __name__ == '__main__':
                  residual_forward=False, 
                  scheduler='plateau')
     #k_fold(model, k_folds=3)
-    simple_run(model, epochs=100)
+    simple_run(model, epochs=10)
 
     
