@@ -10,7 +10,7 @@ from dpks.quant_matrix import QuantMatrix
 import torch
 
 
-def generate_protein_matrix(MS_DATA_PATH = "data/ms"):
+def generate_protein_matrix(MS_DATA_PATH = "data/ms", save=False):
     print("Generating protein matrix...")
     quant_matrix = QuantMatrix(
         quantification_file=f"{MS_DATA_PATH}/220316_ghost_nrt_filtered.tsv",
@@ -28,9 +28,8 @@ def generate_protein_matrix(MS_DATA_PATH = "data/ms"):
         min_samples_per_group = 2, 
         level='protein',
     ).to_df()
-    
-    # proteins = df['Protein']
-    # proteins.to_csv('data/ms/proteins.csv', index=False)
+    if save:
+        df.to_csv('data/ms/QuantMatrix.csv')
     return df
 
 def fit_protein_matrix_to_network_input(protein_matrix, RN_proteins):
@@ -70,9 +69,13 @@ class MyDataModule(LightningDataModule):
                  RN_proteins : list = [], 
                  scale : bool = False, 
                  batch_size : int = 8,
-                 num_workers: int = 12):
+                 num_workers: int = 12,
+                 protein_matrix_path = None):
         super().__init__()
-        protein_matrix = generate_protein_matrix(data_dir)
+        if protein_matrix_path is not None:
+            protein_matrix = pd.read_csv(protein_matrix_path)
+        else:
+            protein_matrix = generate_protein_matrix(data_dir)
         protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
         self.X, self.y = generate_data(protein_matrix, data_dir, scale)
         self.val_size = val_size
@@ -105,7 +108,7 @@ class KFoldDataModule(LightningDataModule):
             split_seed: int = 42,  # split needs to be always the same for correct cross validation
             num_folds: int = 10,
             num_workers: int = 12,
-            batch_size: int = 8
+            batch_size: int = 8,
         ):
         super().__init__()
         self.X = X

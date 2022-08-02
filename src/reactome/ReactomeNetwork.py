@@ -84,7 +84,7 @@ class Reactome():
 
 class ReactomeNetwork():
 
-    def __init__(self,  filter = False, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome_All_Levels.txt"):
+    def __init__(self,  filter = True, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome_All_Levels.txt"):
         self.reactome = Reactome(all_paths_file, protein_file) 
         self.filter = filter # If filter is true, the network will be created with only proteins in ms_proteins
         self.ms_hierarchy = pd.read_csv('data/reactome/HSA_All_ms_path.csv')
@@ -179,7 +179,7 @@ class ReactomeNetwork():
 
 
 if __name__ == '__main__':
-    ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
     RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
     RN2 = ReactomeNetwork()
     print('MS')

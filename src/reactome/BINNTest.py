@@ -1,12 +1,14 @@
 
 from pytorch_lightning import Trainer
-from DataLoaders import MyDataModule, KFoldDataModule, generate_protein_matrix, generate_data, fit_protein_matrix_to_network_input
+from DataLoaders import MyDataModule, KFoldDataModule, generate_data, fit_protein_matrix_to_network_input
 from BINN import BINN,  reset_weights
+from pytorch_lightning.callbacks.early_stopping import EarlyStopping
 from Loggers import SuperLogger
 import pandas as pd
 import torch.nn as nn
 import matplotlib.pyplot as plt
 import seaborn as sns
+import torch
 
 
 def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = False):
@@ -33,7 +35,7 @@ def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = Fals
 def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100):
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
-    protein_matrix = generate_protein_matrix('data/ms')
+    protein_matrix = pd.read_csv('data/ms/QuantMatrix.csv')
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
     for k in range(k_folds):
@@ -46,26 +48,29 @@ def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100):
         trainer.validate(model, dataloader)
         
         
-def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100, log_name = ''):
+def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100, log_name = '', callbacks = []):
     logger = SuperLogger(log_name, tensorboard = True, csv =  True)
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
     #weight_heatmap(model.layers, 'before_training', column_names= model.column_names)
-    dataloader = MyDataModule(val_size = val_size, RN_proteins = RN_proteins, scale=scale, batch_size=32)
-    trainer = Trainer(logger = logger.get_logger_list(), max_epochs=epochs)
+    dataloader = MyDataModule(val_size = val_size, RN_proteins = RN_proteins, scale=scale, batch_size=32, protein_matrix_path = 'data/ms/QuantMatrix.csv')
+    trainer = Trainer(callbacks = callbacks, logger = logger.get_logger_list(), max_epochs=epochs)
     trainer.fit(model, dataloader)
     #weight_heatmap(model.layers, 'after_training_BN', column_names = model.column_names)
     trainer.validate(model, dataloader)
         
 if __name__ == '__main__':
-    ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
     model = BINN(sparse=True,
+                 n_layers = 6,
                  learning_rate = 0.001, 
-                 ms_proteins=ms_proteins, 
+                 ms_proteins=ms_proteins,
                  activation='tanh', 
-                 residual_forward=False, 
                  scheduler='plateau')
     #k_fold(model, k_folds=3)
-    simple_run(model, epochs=10)
+    early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")
+    callbacks = [early_stop_callback]
+    simple_run(model, callbacks = callbacks, epochs=50)
+    #torch.save(model, 'models/test.pth')
 
     

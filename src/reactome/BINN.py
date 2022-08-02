@@ -11,14 +11,15 @@ def generate_sequential(layer_sizes,
                         connectivity_matrices = None, 
                         activation='tanh'):
     """
-    Function that generates a sequential model from layer sizes.
-    Need to implement connectivity matrices.
+    Generates a sequential model from layer sizes.
     """
     def append_activation(layers, activation):
         if activation == 'tanh':
             layers.append((f'Tanh {n}', nn.Tanh()))
         elif activation == 'relu':
             layers.append((f'ReLU {n}', nn.ReLU()))
+        elif activation == "leaky relu":
+            layers.append((f'LeakyReLU {n}', nn.LeakyReLU()))
         return layers
         
     layers = []
@@ -39,22 +40,6 @@ def generate_sequential(layer_sizes,
     return model
 
 
-# The residual forward is trash
-def residual_forward(x, layers):
-    out_layer = nn.LazyLinear(2)
-    r = out_layer(x)
-    for l in layers:
-        if isinstance(l, nn.Linear):
-            x = l(x) # linear 
-        out_layer = nn.LazyLinear(2)
-        r2 = out_layer(x)
-        r += r2
-        if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
-            x = l(x) # activation
-    return r
-
- 
-# TODO: Don't know if necessary but might want to adapt loss function so that later layers are weighted.
 class BINN(LightningModule):
     def __init__(self, 
                  ms_proteins : list = [], 
@@ -62,7 +47,6 @@ class BINN(LightningModule):
                  learning_rate : float = 1e-4, 
                  sparse : bool = False, 
                  n_layers : int = 4, 
-                 residual_forward :bool = False,
                  scheduler : str = 'plateau'):
         super().__init__()
         if sparse:
@@ -85,14 +69,10 @@ class BINN(LightningModule):
         self.loss = nn.CrossEntropyLoss() 
         self.learning_rate = learning_rate 
         self.scheduler = scheduler
-        self.res_forward = residual_forward
         self.save_hyperparameters()
     
     def forward(self, x):
-        if self.res_forward:
-            return residual_forward(x, self.layers)
-        else:
-            return self.layers(x) 
+        return self.layers(x) 
         
         
     def training_step(self, batch, batch_nb):

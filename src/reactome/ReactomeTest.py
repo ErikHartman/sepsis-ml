@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from ReactomeNetwork import ReactomeNetwork
 
-ms_proteins = pd.read_csv('data/ms/proteins.csv')['Proteins']
+ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
 reactome_net1 = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
 reactome_net2 = ReactomeNetwork()
 for reactome_net in [reactome_net1, reactome_net2]:
