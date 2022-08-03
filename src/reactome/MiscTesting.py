@@ -6,39 +6,43 @@ import torch.nn.utils.prune as prune
 import torch
 import numpy as np
 from numpy import random
+from pytorch_lightning import LightningModule
 
-layers= nn.Sequential(
-  nn.Linear(in_features=843, out_features=1034, bias=False)
-  ,nn.Tanh()
-  , nn.Linear(in_features=1034, out_features=473, bias=False)
-  , nn.Tanh(),
-   nn.Linear(in_features=473, out_features=162, bias=False)
- , nn.Tanh()
- ,nn.Linear(in_features=162, out_features=28, bias=False)
- , nn.Tanh(),
-  nn.Linear(in_features=28, out_features=2, bias=True)
-)
 
-def residual_forward(x, layers):
-    out_layer = nn.LazyLinear(2)
-    out_act = nn.Tanh()
-    r = out_layer(x)
-    r = out_act(r) # output from first layer
-    for l in layers:
+class BoringModel(LightningModule):
+
+    def __init__(self):
+        super().__init__()
+        self.layers = nn.Sequential( torch.nn.Linear(32, 10),
+                                    torch.nn.Linear(10,2))
+
+    def forward(self, x):
+        return self.layers(x)
+
+    def loss(self, batch, prediction):
+        # An arbitrary loss to have a loss that updates the model weights during `Trainer.fit` calls
+        return torch.nn.functional.mse_loss(prediction, torch.ones_like(prediction))
+
+    def training_step(self, batch, batch_idx):
+        output = self.layer(batch)
+        loss = self.loss(batch, output)
+        return {"loss": loss}
+    
+    
+models = []
+for i in range(5):
+   models.append(BoringModel())
+
+weights = []
+for m in models:
+    curr_weights = []
+    for l in m.layers:
         if isinstance(l, nn.Linear):
-            x = l(x) # linear 
-        if isinstance(l, nn.BatchNorm1d):
-            x = l(x)
-        if isinstance(l,nn.Tanh) or isinstance(l, nn.ReLU):
-            x = l(x) # activation
-        out_layer = nn.LazyLinear(2)
-        r2 = out_layer(x)
-        out_act = nn.Tanh()
-        r += out_act(r2)
-    return r
+           curr_weights.append(l.weight.detach().numpy())
+    weights.append(curr_weights)
+weights = np.asarray(weights)
+weights = weights.mean(axis=0)
+averaged_model = BoringModel()
+averaged_model.layers.weight = weights
 
-
-input = random.rand(843)
-input = torch.tensor(input).float()
-out = layers(input)
-print(out)
+print(averaged_model.layers.weight[0])

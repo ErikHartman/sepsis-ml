@@ -1,12 +1,10 @@
 import torch
 import shap
 import torch.nn as nn
-from BINN import BINN
-from DataLoaders import generate_protein_matrix, generate_data, fit_protein_matrix_to_network_input
+from DataLoaders import generate_data, fit_protein_matrix_to_network_input
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
 import pandas as pd
-import numpy as np
 
 """
 
@@ -14,9 +12,21 @@ Good documentation on SHAP: https://christophm.github.io/interpretable-ml-book/s
 
 """
 
+def get_pathway_name(features):
+    mapping = pd.read_csv('data/reactome/ReactomePathways.txt', sep='\t', names=['ReactomeID','Name','Species'])
+    mapping = mapping[mapping['Species'] == 'Homo sapiens']
+    mapping = mapping[mapping['ReactomeID'].isin(features)]
+    mapping.set_index('ReactomeID', inplace=True)
+    try:
+        mapping = mapping.loc[features]
+    except KeyError:
+        return features
+    return mapping['Name'].values
+    
+
 if __name__ == '__main__':
-    checkpoint_file_path = 'lightning_logs/version_16/checkpoints/epoch=99-step=200.ckpt'
-    model = BINN.load_from_checkpoint(checkpoint_file_path)
+    model_file_path = 'models/averaged_model.pth'
+    model = torch.load(model_file_path)
     model.report_layer_structure()
 
 
@@ -47,20 +57,21 @@ if __name__ == '__main__':
 
     def shap_for_layers(model, background, test_data):
         feature_index = 0
-        intermediate_data = test_data[0:5]
+        intermediate_data = test_data
         for layer in model.layers:
             if isinstance(layer, nn.Linear):
                 feature_names = model.column_names[feature_index]
-                explainer = shap.DeepExplainer((model, layer), background[0:20])
-                shap_values = explainer.shap_values(test_data[0:5])
+                feature_names = get_pathway_name(feature_names)
+                explainer = shap.DeepExplainer((model, layer), background)
+                shap_values = explainer.shap_values(test_data)
     
-                shap.summary_plot(shap_values, intermediate_data, feature_names = feature_names)
-                plt.savefig(f'plots/shap/SHAP_layer_{feature_index}.jpg')
+                shap.summary_plot(shap_values, intermediate_data, feature_names = feature_names, plot_size=[12,6])
+                plt.savefig(f'plots/shap/SHAP_layer_{feature_index}.jpg', dpi=200)
                 feature_index += 1
                 plt.clf()
                 intermediate_data = layer(intermediate_data)
             if isinstance(layer, nn.Tanh) or isinstance(layer, nn.ReLU) or isinstance(layer, nn.LeakyReLU):
                 intermediate_data = layer(intermediate_data)
 
-    # shap_for_layers(model, background, test_data)
+    shap_for_layers(model, background, test_data)
     shap_test(model, background, test_data)
