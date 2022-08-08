@@ -51,7 +51,7 @@ if __name__ == '__main__':
         explainer = shap.DeepExplainer(model, background)
         shap_values = explainer.shap_values(test_data)
 
-        shap.summary_plot(shap_values[0], test_data, feature_names = feature_names)
+        shap.summary_plot(shap_values, test_data, feature_names = feature_names)
         plt.savefig('plots/shap/SHAP_complete_model.jpg')
         plt.clf()
 
