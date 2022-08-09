@@ -34,7 +34,7 @@ def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = Fals
         plt.clf()
 
     
-def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100):
+def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100, log_name = ''):
     trained_models = []
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
@@ -42,11 +42,12 @@ def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100):
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
     for k in range(k_folds):
+        logger = SuperLogger(log_name, tensorboard = True, csv =  True)
         model.apply(reset_weights) # reset weights. No biases in network
         dataloader = KFoldDataModule(X,y, k=k, num_folds=k_folds, batch_size = 32)
         trainer = Trainer( max_epochs=epochs)
         trainer.fit(model, dataloader)
-        weight_heatmap(model.layers, 'after_training_ensemble_learning', column_names =model.column_names, k = k, only_last=True)
+        #weight_heatmap(model.layers, 'after_training_ensemble_learning', column_names =model.column_names, k = k, only_last=True)
         trainer.validate(model, dataloader)
         trained_models.append(copy.deepcopy(model))
     return trained_models
@@ -101,18 +102,18 @@ def ensemble_learning(k_folds = 3, epochs=100, n_layers = 4, save=False):
         
 if __name__ == '__main__':
     
-    model = ensemble_learning(save=True, epochs=50)
+    #model = ensemble_learning(save=True, epochs=50)
     
-    weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
-    # ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    # model = BINN(sparse=True,
-    #              n_layers = 4,
-    #              learning_rate = 0.001, 
-    #              ms_proteins=ms_proteins,
-    #              activation='tanh', 
-    #              scheduler='plateau')
-    # #k_fold(model, k_folds=3)
-    # early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")
+    #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    model = BINN(sparse=False,
+                 n_layers = 4,
+                 learning_rate = 0.001, 
+                 ms_proteins=ms_proteins,
+                 activation='tanh', 
+                 scheduler='plateau')
+    k_fold(model, k_folds=3)
+    #early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")
     # callbacks = [early_stop_callback]
     # model = simple_run(model, callbacks = callbacks, epochs=10)
     # model.weights
