@@ -107,7 +107,7 @@ class BINN(LightningModule):
         if self.scheduler == 'plateau':
             scheduler = {"scheduler": 
                         torch.optim.lr_scheduler.ReduceLROnPlateau(
-                            optimizer, patience=10, 
+                            optimizer, patience=5, 
                             threshold = 0.00001, 
                             mode='min', verbose=True),
                         "interval": "epoch",

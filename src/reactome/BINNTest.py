@@ -3,6 +3,7 @@ from pytorch_lightning import Trainer
 from DataLoaders import MyDataModule, KFoldDataModule, generate_data, fit_protein_matrix_to_network_input
 from BINN import BINN,  reset_weights
 from pytorch_lightning.callbacks.early_stopping import EarlyStopping
+from sklearn.model_selection import train_test_split
 from Loggers import SuperLogger
 import pandas as pd
 import torch.nn as nn
@@ -34,21 +35,25 @@ def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = Fals
         plt.clf()
 
     
-def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100, log_name = ''):
+def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100, log_name = '', save=False, save_prefix='', data_split=1.0):
     trained_models = []
     RN_proteins = model.RN.ms_proteins
     model.report_layer_structure()
     protein_matrix = pd.read_csv('data/ms/QuantMatrix.csv')
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
+    if data_split < 1:
+        X, _, y,_ = train_test_split(X,y, train_size =data_split, stratify = y)
     for k in range(k_folds):
-        logger = SuperLogger(log_name, tensorboard = True, csv =  True)
+        log_dir = f'logs/{log_name}'
+        logger = SuperLogger(log_dir, tensorboard = True, csv =  True)
         model.apply(reset_weights) # reset weights. No biases in network
         dataloader = KFoldDataModule(X,y, k=k, num_folds=k_folds, batch_size = 32)
-        trainer = Trainer( max_epochs=epochs)
+        trainer = Trainer(logger=logger.get_logger_list(), max_epochs=epochs)
         trainer.fit(model, dataloader)
-        #weight_heatmap(model.layers, 'after_training_ensemble_learning', column_names =model.column_names, k = k, only_last=True)
         trainer.validate(model, dataloader)
+        if save:
+            torch.save(model, f'models/{save_prefix}_k={k}.pth') 
         trained_models.append(copy.deepcopy(model))
     return trained_models
         
@@ -68,15 +73,7 @@ def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100, log_name = 
     return model
     
     
-def ensemble_learning(k_folds = 3, epochs=100, n_layers = 4, save=False):
-    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    model = BINN(sparse=True,
-                 n_layers = n_layers,
-                 learning_rate = 0.001, 
-                 ms_proteins=ms_proteins,
-                 activation='tanh', 
-                 scheduler='plateau')
-    trained_models = k_fold(model, k_folds=k_folds, scale=True, epochs=epochs)
+def average_models(trained_models = [], n_layers=4, save=False, save_name=''):
     averaged_model = BINN(sparse=True,
                  n_layers = n_layers,
                  learning_rate = 0.001, 
@@ -94,11 +91,43 @@ def ensemble_learning(k_folds = 3, epochs=100, n_layers = 4, save=False):
     weights = weights.mean(axis=0)
     averaged_model = model
     averaged_model.layers.weight = weights
-    simple_run(averaged_model, fit=False, validate=True)
     if save:
-        torch.save(averaged_model, 'models/averaged_model.pth')
+        torch.save(averaged_model, f'models/{save_name}.pth')
     return averaged_model
     
+def ensemble_learning(k_folds = 3, epochs=100, n_layers = 4, save=False):
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    model = BINN(sparse=True,
+                 n_layers = n_layers,
+                 learning_rate = 0.001, 
+                 ms_proteins=ms_proteins,
+                 activation='tanh', 
+                 scheduler='plateau')
+    trained_models = k_fold(model, k_folds=k_folds, scale=True, epochs=epochs)
+    averaged_model = average_models(trained_models, n_layers, save=True, save_str = 'averaged_model')
+    simple_run(averaged_model, fit=False, validate=True)
+    return averaged_model
+
+def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False):
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    for n in n_layers_list:
+        model = BINN(sparse=True,
+                    n_layers = n,
+                    learning_rate = 0.001, 
+                    ms_proteins=ms_proteins,
+                    activation='tanh', 
+                    scheduler='plateau')
+        save_prefix = f'n_layers={n}'
+        trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix)
+        average_models(trained_models,n_layers = n, save=True, save_name = f'{save_prefix}_averaged')
+        
+    
+
+def k_fold_with_varying_data(model :BINN, data_splits=[0.25,0.5,0.75,1], save=False):
+    for data_split in data_splits:
+        save_prefix = f'data_split={data_split}'
+        trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix, data_split=data_split)
+        average_models(trained_models,n_layers = n, save=True, save_name = f'{save_prefix}_averaged')
         
 if __name__ == '__main__':
     
@@ -106,13 +135,16 @@ if __name__ == '__main__':
     
     #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    model = BINN(sparse=False,
+    model = BINN(sparse=True,
                  n_layers = 4,
                  learning_rate = 0.001, 
                  ms_proteins=ms_proteins,
                  activation='tanh', 
                  scheduler='plateau')
-    k_fold(model, k_folds=3)
+    k_fold_with_varying_data(model, save=True)
+   # k_fold_with_varying_n_layers(save=True)
+   
+    #k_fold(model, k_folds=3)
     #early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")
     # callbacks = [early_stop_callback]
     # model = simple_run(model, callbacks = callbacks, epochs=10)

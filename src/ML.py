@@ -74,6 +74,7 @@ def plot_confusion_matrices(classifiers, X_test, y_test):
     axs[-1,-1].bar(x=list(classifiers.keys()), height = list(TN.values()), bottom=list(TP.values()), label = 'TN', color='blue', alpha=0.5) 
     axs[-1,-1].legend()
     axs[-1,-1].set_xticklabels(short_names, rotation=90)
+    axs[-1,-1].set_ylabel('Accuracy')
     sns.despine(ax=axs[-1,-1])
     plt.tight_layout()
     plt.savefig('plots/ML/ConfusionMatrices.jpg', dpi=300)
@@ -96,7 +97,7 @@ def plot_roc_curve(classifiers, X_test, y_test):
         plt.plot(fpr[name],tpr[name], label=f"{name} : {auc[name]:.2f}", color=colors[i],alpha=0.5)
 
     plt.tight_layout()
-    plt.legend(title = "AUC",)
+    plt.legend(title = "AUC",frameon=False)
     plt.ylabel('Sensitivity')
     plt.xlabel('1-specificity')
     sns.despine()
