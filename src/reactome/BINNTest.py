@@ -141,14 +141,14 @@ if __name__ == '__main__':
                  ms_proteins=ms_proteins,
                  activation='tanh', 
                  scheduler='plateau')
-    k_fold_with_varying_data(model, save=True)
+   # k_fold_with_varying_data(model, save=True)
    # k_fold_with_varying_n_layers(save=True)
    
     #k_fold(model, k_folds=3)
     #early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")
     # callbacks = [early_stop_callback]
-    # model = simple_run(model, callbacks = callbacks, epochs=10)
+    model = simple_run(model, epochs=100)
     # model.weights
-    #torch.save(model, 'models/test.pth')
+    torch.save(model, 'models/test.pth')
 
     

@@ -4,6 +4,7 @@ import os
 import seaborn as sns
 import matplotlib.pyplot as plt
 from BINN import BINN
+import torch
 import numpy as np
 
 
@@ -57,7 +58,7 @@ def plot_trainable_parameters_over_layers():
     df = pd.DataFrame.from_dict(data=trainable_params)
     sns.barplot(data=df, x = 'n', y= 'params', color='red', alpha=0.5)
     plt.xlabel('# layers')
-    plt.ylabel('# Trainable parameters')
+    plt.ylabel('# trainable parameters')
 
     sns.despine()
     plt.tight_layout()
@@ -78,7 +79,13 @@ def plot_performance_of_averaged_model(log_dir, averaged_log_dir):
     plt.xticks([1,2], labels=['Individual', 'Averaged'])
     plt.tight_layout()
     plt.savefig('plots/BINN/Accuracies.jpg', dpi=300)
-    
+
+
+""" Accuracy of averaged models with n_layers """
+def plot_performance_of_n_layers(models=[]):
+    for m in models:
+        model = torch.load(m)
+        
     
 if __name__ == '__main__':
     plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')

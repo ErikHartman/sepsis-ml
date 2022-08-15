@@ -54,6 +54,7 @@ class BINN(LightningModule):
         else:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins)
         print(self.RN.info())
+        self.n_layers = n_layers
         connectivity_matrices = self.RN.get_connectivity_matrices(n_layers)
         layer_sizes = []
         self.column_names = []
@@ -118,6 +119,9 @@ class BINN(LightningModule):
     
     def calculate_accuracy(self, y, prediction):
         return torch.sum(y == prediction).item() / (float(len(y)))
+    
+    def get_connectivity_matrices(self):
+        return self.RN.get_connectivity_matrices(self.n_layers)
         
 def init_weights(m):
     if type(m) == nn.Linear:
