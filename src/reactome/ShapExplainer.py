@@ -79,12 +79,7 @@ if __name__ == '__main__':
         return shap_dict
                 
 
-    def shap_sankey(model, background, test_data):
-        """ 
-        Want a methods that produces Sankey diagram for neural network
-        from a to b: value = shap_value
-        
-        """
+    def shap_sankey(model, background, test_data, show_top_n=10):
         shap_dict = shap_for_layers(model, background, test_data, plot=False)
         feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[]}
         connectivity_matrices = model.get_connectivity_matrices()
@@ -109,22 +104,21 @@ if __name__ == '__main__':
                 connections = connections.loc[:, (connections != 0).any(axis=0)] # get targets and append to target
                
                 for target in connections:
-                    feature_dict['source'].append(features[f])
-                    feature_dict['target'].append(target)
-                    feature_dict['value'].append(sv_mean[1][f])
-                    feature_dict['type'].append(0) 
-                    feature_dict['source'].append(features[f])
-                    feature_dict['target'].append(target)
-                    feature_dict['value'].append(sv_mean[0][f])
-                    feature_dict['type'].append(1) 
-                    feature_dict['source layer'].append(curr_layer)
-                    feature_dict['source layer'].append(curr_layer)
+                        feature_dict['source'].append(features[f])
+                        feature_dict['target'].append(target)
+                        feature_dict['value'].append(sv_mean[1][f])
+                        feature_dict['type'].append(0) 
+                        feature_dict['source'].append(features[f])
+                        feature_dict['target'].append(target)
+                        feature_dict['value'].append(sv_mean[0][f])
+                        feature_dict['type'].append(1) 
+                        feature_dict['source layer'].append(curr_layer)
+                        feature_dict['source layer'].append(curr_layer)
             curr_layer += 1
         n_layers = curr_layer      
         df = pd.DataFrame(data=feature_dict)
         
         def normalize_layer_values(df):
-            """ TODO: double check this """
             new_df = pd.DataFrame()
             total_value_sum = df['value'].sum()
             for layer in df['source layer'].unique():
@@ -144,8 +138,6 @@ if __name__ == '__main__':
             df = df[df['source'] != df['target']]
             return df
             
-            
-        """ Want to turn this source-target dataframe into a sankey diagram """
         df = remove_loops(df)
         df = normalize_layer_values(df)
         df['source'] = get_pathway_name(df['source'].values)
@@ -154,13 +146,13 @@ if __name__ == '__main__':
         def get_top_n(df, layer, n):
             """ Returns the top n (sum of shap) for layer """
             l = df[df['source layer'] == layer]
-            l = l.groupby('source', as_index=False).sum().sort_values('value', ascending=False)[0:n]
+            l = l.groupby('source', as_index=False).mean().sort_values('value', ascending=False)[0:n]
             return l['source'].values.tolist()
         
         top_n = {}
         for layer in range(n_layers):
             if layer < n_layers:
-                top_n[layer] = get_top_n(df, layer, 10)
+                top_n[layer] = get_top_n(df, layer, show_top_n)
 
         
         # Set all that is not in top n to "other"
@@ -174,10 +166,10 @@ if __name__ == '__main__':
             for t in top_n.values():
                 if s in t:
                     return s
-            return f"Residual {layer}"
+            return f"Other connections {layer}"
         
-        df['target_w_other']= df.apply(lambda x: set_to_other(x, top_n ,'target'),axis=1)
         df['source_w_other'] = df.apply(lambda x: set_to_other(x, top_n, 'source'),axis=1)
+        df['target_w_other']= df.apply(lambda x: set_to_other(x, top_n ,'target'),axis=1)
         print(df)
 
         unique_features = df['source_w_other'].unique().tolist()
@@ -191,9 +183,9 @@ if __name__ == '__main__':
             target_code = [get_code(s,code_map) for s in conn['target_w_other']]
             values = [v for v in conn['normalized value']]
             def get_link_color(type,target):
-                if 'Residual' in target:
+                if 'Other connections' in target:
                     return 'rgb(236,236,236)'
-                if type == 0:
+                if type == 1:
                     return 'rgba(255,0,0, 0.5)' 
                 return 'rgba(0,0,255,0.5)' 
             link_colors = [get_link_color(c,t) for c,t in zip(conn['type'], conn['target_w_other'])]
@@ -202,17 +194,17 @@ if __name__ == '__main__':
         def get_node_colors(sources, df):
             colors = []
             for source in sources:
-                if "Residual" in source:
+                if "Other connections" in source:
                     colors.append('rgb(236,236,236)')
                 elif source == 'root':
                     colors.append('rgba(0,0,0,1)')
                 else:
                     source_df = df[df['source_w_other'] == source]
-                    red = source_df[source_df['type'] == 0].groupby('source_w_other').sum()['value'].values[0]
-                    blue = source_df[source_df['type'] == 1].groupby('source_w_other').sum()['value'].values[0]
+                    red = source_df[source_df['type'] == 1].groupby('source_w_other').sum()['value'].values[0]
+                    blue = source_df[source_df['type'] == 0].groupby('source_w_other').sum()['value'].values[0]
                     red = 255*red/(red+blue)
                     blue = 255*blue/(red+blue)
-                    colors.append(f'rgba({red},0,{blue},0.5)')
+                    colors.append(f'rgba({red},0,{blue},0.5)') # replace with cmap
             return colors
         
         def get_node_positions(feature_labels, df):
@@ -240,12 +232,12 @@ if __name__ == '__main__':
         encoded_source, encoded_target, value, link_colors = get_connections(sources, df)
         node_colors = get_node_colors(feature_labels,df)
 
-        x,y = get_node_positions(feature_labels,df) #not used because tis messes up
+        #x,y = get_node_positions(feature_labels,df) #not used because tis messes up
         
         nodes = dict(
                 pad = 25,
                 thickness = 20,
-                line = dict(color = "black", width = 0),
+                line = dict(color = "white", width = 0),
                 label = feature_labels,
                 color = node_colors,
                 )
@@ -259,6 +251,7 @@ if __name__ == '__main__':
         fig = go.Figure(
             data=[
                 go.Sankey(
+                    
                     textfont = dict(size=15),
                     orientation="h",
                     arrangement = "snap",
@@ -269,7 +262,7 @@ if __name__ == '__main__':
             )
 
         
-        fig.write_image('plots/BINN/ShapSankey.png', width=1500, height=1000, scale=3)
+        fig.write_image('plots/BINN/ShapSankey.png', width=1900, height=1000, scale=3)
         
   
     #shap_for_layers(model, background, test_data)

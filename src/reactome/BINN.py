@@ -95,13 +95,21 @@ class BINN(LightningModule):
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         self.log("val_acc", accuracy, prog_bar=True, on_step=False, on_epoch=True)
         
-    def report_layer_structure(self):
-        print(self.layers)
+    def report_layer_structure(self, verbose=False):
+        if verbose:
+            print(self.layers)
+        parameters = {'nz weights':[], 'weights':[]}
         for i, l in enumerate(self.layers):
             if isinstance(l,nn.Linear):
-                print(f"Layer {i}")
-                print(f"Number of nonzero elements: {torch.count_nonzero(l.weight)}")
-                print(f"Total number of elements: {torch.numel(l.weight)}")
+                nz_weights = torch.count_nonzero(l.weight)
+                weights = torch.numel(l.weight)
+                if verbose:
+                    print(f"Layer {i}")
+                    print(f"Number of nonzero elements: {nz_weights} ")
+                    print(f"Total number of elements: {weights} ")
+                parameters['nz weights'].append(nz_weights)
+                parameters['weights'].append(weights)
+        return parameters
                 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-3)
