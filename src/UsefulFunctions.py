@@ -4,6 +4,13 @@ import numpy as np
 import pandas as pd
 from sklearn.model_selection import cross_val_score
 
+def color_if_significant(row):
+    if row['logPValue'] > 1.31 and row['Log2FoldChange1-2'] < -1.2:
+        return 'blue'
+    if row['logPValue'] > 1.31 and row['Log2FoldChange1-2'] > 1.2:
+        return 'red'
+    return 'black'
+
 def remove_nan(array):
     return [x for x in array if not(math.isnan(x)) == True]
 

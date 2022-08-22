@@ -81,7 +81,7 @@ if __name__ == '__main__':
 
     def shap_sankey(model, background, test_data, show_top_n=10):
         shap_dict = shap_for_layers(model, background, test_data, plot=False)
-        feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[]}
+        feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[], 'target layer':[]}
         connectivity_matrices = model.get_connectivity_matrices()
         curr_layer = 0
         
@@ -114,6 +114,8 @@ if __name__ == '__main__':
                         feature_dict['type'].append(1) 
                         feature_dict['source layer'].append(curr_layer)
                         feature_dict['source layer'].append(curr_layer)
+                        feature_dict['target layer'].append(curr_layer+1)
+                        feature_dict['target layer'].append(curr_layer+1)
             curr_layer += 1
         n_layers = curr_layer      
         df = pd.DataFrame(data=feature_dict)
@@ -137,8 +139,22 @@ if __name__ == '__main__':
             """
             df = df[df['source'] != df['target']]
             return df
-            
+        
+        def remove_double_connections(df):
+            """ 
+            Since _copy exist, there may be connections from two layers to a single node 
+            (one from X and one from X_copy). We only want to plot the value to the earliest layer
+            """
+            new_df = pd.DataFrame()
+            for source in df['source'].unique():
+                min_layer = df[df['source'] == source]['source layer'].min() 
+                keep = df[df['source'] == source]
+                keep = keep[keep['source layer'] == min_layer]
+                new_df = pd.concat([new_df, keep])
+            return new_df
+                 
         df = remove_loops(df)
+        df = remove_double_connections(df)
         df = normalize_layer_values(df)
         df['source'] = get_pathway_name(df['source'].values)
         df['target'] = get_pathway_name(df['target'].values)
@@ -146,17 +162,22 @@ if __name__ == '__main__':
         def get_top_n(df, layer, n):
             """ Returns the top n (sum of shap) for layer """
             l = df[df['source layer'] == layer]
-            l = l.groupby('source', as_index=False).mean().sort_values('value', ascending=False)[0:n]
-            return l['source'].values.tolist()
+            s = l.groupby('source', as_index=False).mean().sort_values('value', ascending=False)[0:n]
+            top_n_source = s['source'].values.tolist()
+            # if layer >0 :
+            #     l_minus_one = df[df['source layer'] == layer-1]
+            #     t = l_minus_one.groupby('target', as_index=False).mean().sort_values('value', ascending=False)[0:n]
+            #     top_n_target = t['target'].values.tolist()
+            #     return top_n_source + top_n_target
+            return top_n_source 
         
         top_n = {}
         for layer in range(n_layers):
             if layer < n_layers:
                 top_n[layer] = get_top_n(df, layer, show_top_n)
 
-        
-        # Set all that is not in top n to "other"
         def set_to_other(row, top_n, source_or_target):
+            # Set all that is not in top n to "other"
             s = row[source_or_target]
             if s == 'root':
                 return 'root'
@@ -202,8 +223,9 @@ if __name__ == '__main__':
                     source_df = df[df['source_w_other'] == source]
                     red = source_df[source_df['type'] == 1].groupby('source_w_other').sum()['value'].values[0]
                     blue = source_df[source_df['type'] == 0].groupby('source_w_other').sum()['value'].values[0]
-                    red = 255*red/(red+blue)
-                    blue = 255*blue/(red+blue)
+                    red = int(255*red/(red+blue))
+                    blue = int(255*blue/(red+blue))
+                    
                     colors.append(f'rgba({red},0,{blue},0.5)') # replace with cmap
             return colors
         
@@ -260,11 +282,9 @@ if __name__ == '__main__':
                     link = links)
                   ]
             )
-
-        
         fig.write_image('plots/BINN/ShapSankey.png', width=1900, height=1000, scale=3)
         
   
     #shap_for_layers(model, background, test_data)
     #shap_test(model, background, test_data)
-    shap_sankey(model, background, test_data)
+    shap_sankey(model, background, test_data, show_top_n = 10)

@@ -95,6 +95,15 @@ class BINN(LightningModule):
         self.log("val_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
         self.log("val_acc", accuracy, prog_bar=True, on_step=False, on_epoch=True)
         
+    def test_step(self, batch, batch_nb):
+        x, y = batch
+        y_hat = self(x)
+        loss = self.loss(y_hat, y)
+        prediction = torch.argmax(y_hat, dim=1)
+        accuracy = self.calculate_accuracy(y, prediction)
+        self.log("test_loss", loss, prog_bar=True, on_step=False, on_epoch=True)
+        self.log("test_acc", accuracy, prog_bar=True, on_step=False, on_epoch=True)
+        
     def report_layer_structure(self, verbose=False):
         if verbose:
             print(self.layers)
@@ -135,6 +144,6 @@ def init_weights(m):
     if type(m) == nn.Linear:
         torch.nn.init.xavier_uniform(m.weight)
         
-def reset_weights(m):
+def reset_params(m):
     if isinstance(m, nn.BatchNorm1d) or isinstance(m, nn.Linear):
         m.reset_parameters()

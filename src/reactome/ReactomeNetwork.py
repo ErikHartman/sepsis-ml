@@ -14,10 +14,6 @@ Also want a version where the RN is created on just a subset of proteins.
 
 
 def get_map_from_layer(layer_dict):
-    '''
-    :param layer_dict: dictionary of connections (e.g {'pathway1': ['g1', 'g2', 'g3']}
-    :return: dataframe map of layer (index = proteins, columns = pathways, , values = 1 if connected; 0 else)
-    '''
     pathways = layer_dict.keys()
     proteins = list(itertools.chain.from_iterable(layer_dict.values()))
     proteins = list(np.unique(proteins))
