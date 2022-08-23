@@ -70,6 +70,7 @@ def get_layers_from_net(net, n_levels):
             n_name = re.sub('_copy.*', '', n) #removes the "_copy" in the node name (see complete_network())
             next = net.successors(n) #gets all the succesor of nodes at level
             dict[n_name] = [re.sub('_copy.*', '', nex) for nex in next] #for each node, it adds a list of succesors
+            #dict[n_name] = [nex for nex in next]
         layers.append(dict) #this will then return a list where all layers have a dict of origin node and successors.
     return layers
 

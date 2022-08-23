@@ -138,16 +138,20 @@ def plot_trainable_parameters_over_layers():
         trainable_params['sparse_params'].append(sparse_parameters)
         trainable_params['dense_params'].append(dense_parameters)
     print(trainable_params)
-    fig, ax = plt.subplots(figsize=(4,5))
-    width = 0.4
+    fig, ax = plt.subplots(figsize=(4,3))
+    width = 0.5
     x = np.arange(len(trainable_params['n']))
     ax.bar(x=x + width/2, height=trainable_params['dense_params'], width=width, label='Dense NN', color='blue', alpha=0.5)
-    ax.bar(x=x - width/2, height=trainable_params['sparse_params'], width=width, label='Sparse BINN', color='red', alpha=0.5)
+    ax.bar(x=x - width/2, height=trainable_params['sparse_params'], width=width, label='BINN', color='red', alpha=0.5)
     for bar in ax.patches:
-        ax.annotate(f"{format(bar.get_height()/10**3, '.0f')}k",
+        if bar.get_height() > 10**6:
+            format_string = f"{format(bar.get_height()/10**6, '.0f')}M"
+        else:
+            format_string = f"{format(bar.get_height()/10**3, '.0f')}k"
+        ax.annotate(format_string,
                     (bar.get_x() + bar.get_width() / 2,
                         bar.get_height()), ha='center', va='center',
-                    size=10, xytext=(0, 8),
+                    size=10, xytext=(0, -8),
                     textcoords='offset points')
     plt.yscale('log')
     plt.ylim([10**3,1.5*10**7])
@@ -159,37 +163,41 @@ def plot_trainable_parameters_over_layers():
     plt.tight_layout()
     plt.savefig('plots/BINN/TrainableParameters.jpg', dpi=400)
     
+def plot_nodes_per_layer():
+    plt.clf()
+    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    nodes = {'n_layers':[], 'number_of_nodes':[], 'layer':[]}
+    for n_layers in range(3,7):
+        model = BINN(sparse=True,
+                    n_layers = n_layers,
+                    learning_rate = 0.001, 
+                    ms_proteins=ms_proteins,
+                    activation='tanh', 
+                    scheduler='plateau')
+        nr_nodes = [len(x) for x in model.column_names[1:]]
+        for i, node in enumerate(nr_nodes):
+            nodes['number_of_nodes'].append(node)
+            nodes['n_layers'].append(n_layers)
+            nodes['layer'].append(i+1)
+    nodes = pd.DataFrame(nodes)
+    print(nodes)
+    fig, ax = plt.subplots(figsize=(3,3))
+    sns.lineplot(data=nodes, x ='layer', y='number_of_nodes', hue='n_layers', palette='vlag',marker='o')
 
-def plot_performance_of_ensemble(log_dir, ensemble_log_dir):
-    k_metrics = get_metrics_for_dir(log_dir)
-    ensemble_accuracies = pd.read_csv(ensemble_log_dir)['accuracy'].values
-    final_epoch = max(k_metrics['epoch'])
-    k_accuracies = k_metrics[k_metrics['epoch'] == final_epoch]['val_acc'].values
-   
-    fig = plt.figure(figsize=(3,3))
-    plt.bar(x=[1,2], height=[np.mean(k_accuracies), np.mean(ensemble_accuracies)], yerr=[np.std(k_accuracies), np.std(ensemble_accuracies)], color=['red','blue'], alpha=0.5, capsize=5)
-    plt.ylim([0.5,1.1])
+    plt.legend(title='# hidden layers', frameon=False)
     sns.despine()
-    plt.ylabel('Accuracy')
-    plt.xticks([1,2], labels=['Individual', 'Ensemble voting'])
     plt.tight_layout()
-    plt.savefig('plots/BINN/Accuracies.jpg', dpi=300)
+    plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
     
-def plot_roc(averaged_model):
-    """ Plot ROC curve for model. """
-    return None
     
-def plot_confusion_matrix(confusion_matrix):
-    """ Plot confusion for model """
-    return None
 
 
         
-    
 if __name__ == '__main__':
     #plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')
     #plot_val_loss(test_type = 'data_split', save_str = 'DataSplit')
     #plot_trainable_parameters_over_layers()    
     #plot_performance_of_ensemble('ensemble_voting', 'logs/ensemble_voting/accuracy.csv') # switch this to averaged results and k_means
     #plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
-    plot_trainable_parameters_over_layers()
+    #plot_trainable_parameters_over_layers()
+    plot_nodes_per_layer()

@@ -44,3 +44,21 @@ def average_models(trained_models = [], ms_proteins = [], n_layers=4, save=False
     if save:
         torch.save(averaged_model, f'models/{save_str}.pth')
     return averaged_model
+
+
+
+def plot_performance_of_ensemble(log_dir, ensemble_log_dir):
+    k_metrics = get_metrics_for_dir(log_dir)
+    ensemble_accuracies = pd.read_csv(ensemble_log_dir)['accuracy'].values
+    final_epoch = max(k_metrics['epoch'])
+    k_accuracies = k_metrics[k_metrics['epoch'] == final_epoch]['val_acc'].values
+   
+    fig = plt.figure(figsize=(3,3))
+    plt.bar(x=[1,2], height=[np.mean(k_accuracies), np.mean(ensemble_accuracies)], yerr=[np.std(k_accuracies), np.std(ensemble_accuracies)], color=['red','blue'], alpha=0.5, capsize=5)
+    plt.ylim([0.5,1.1])
+    sns.despine()
+    plt.ylabel('Accuracy')
+    plt.xticks([1,2], labels=['Individual', 'Ensemble voting'])
+    plt.tight_layout()
+    plt.savefig('plots/BINN/Accuracies.jpg', dpi=300)
+    
