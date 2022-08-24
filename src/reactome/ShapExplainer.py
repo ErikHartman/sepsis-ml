@@ -4,6 +4,7 @@ import torch.nn as nn
 from DataLoaders import generate_data, fit_protein_matrix_to_network_input
 from sklearn.model_selection import train_test_split
 import matplotlib.pyplot as plt
+import matplotlib
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -102,15 +103,14 @@ if __name__ == '__main__':
             for f in range(sv_mean.shape[-1]):
                 connections = cm[cm.index == features[f]]
                 connections = connections.loc[:, (connections != 0).any(axis=0)] # get targets and append to target
-               
                 for target in connections:
                         feature_dict['source'].append(features[f])
                         feature_dict['target'].append(target)
-                        feature_dict['value'].append(sv_mean[1][f])
+                        feature_dict['value'].append(sv_mean[0][f])
                         feature_dict['type'].append(0) 
                         feature_dict['source'].append(features[f])
                         feature_dict['target'].append(target)
-                        feature_dict['value'].append(sv_mean[0][f])
+                        feature_dict['value'].append(sv_mean[1][f])
                         feature_dict['type'].append(1) 
                         feature_dict['source layer'].append(curr_layer)
                         feature_dict['source layer'].append(curr_layer)
@@ -124,10 +124,11 @@ if __name__ == '__main__':
             new_df = pd.DataFrame()
             total_value_sum = df['value'].sum()
             for layer in df['source layer'].unique():
-                layer_df = df[df['source layer'] == layer]
+                layer_df = df.loc[df['source layer'] == layer]
                 layer_total = layer_df['value'].sum()
-                print(layer_total)
                 layer_df['normalized value'] = total_value_sum *layer_df['value'] / layer_total
+                normalized_total = layer_df['normalized value'].sum()
+                print(f"Layer total: {layer_total}, normalized total: {normalized_total}")
                 new_df = pd.concat([new_df, layer_df])
             return new_df
             
@@ -147,9 +148,9 @@ if __name__ == '__main__':
             """
             new_df = pd.DataFrame()
             for source in df['source'].unique():
-                min_layer = df[df['source'] == source]['source layer'].min() 
-                keep = df[df['source'] == source]
-                keep = keep[keep['source layer'] == min_layer]
+                min_layer = df.loc[df['source'] == source]['source layer'].min() 
+                keep = df.loc[df['source'] == source]
+                keep = keep.loc[keep['source layer'] == min_layer]
                 new_df = pd.concat([new_df, keep])
             return new_df
                  
@@ -161,14 +162,9 @@ if __name__ == '__main__':
         
         def get_top_n(df, layer, n):
             """ Returns the top n (sum of shap) for layer """
-            l = df[df['source layer'] == layer]
+            l = df.loc[df['source layer'] == layer]
             s = l.groupby('source', as_index=False).mean().sort_values('value', ascending=False)[0:n]
             top_n_source = s['source'].values.tolist()
-            # if layer >0 :
-            #     l_minus_one = df[df['source layer'] == layer-1]
-            #     t = l_minus_one.groupby('target', as_index=False).mean().sort_values('value', ascending=False)[0:n]
-            #     top_n_target = t['target'].values.tolist()
-            #     return top_n_source + top_n_target
             return top_n_source 
         
         top_n = {}
@@ -195,8 +191,9 @@ if __name__ == '__main__':
 
         unique_features = df['source_w_other'].unique().tolist()
         unique_features += df['target_w_other'].unique().tolist()
-        code_map, feature_labels = encode_features(unique_features)
+        code_map, feature_labels = encode_features(list(set(unique_features)))
         sources = df['source_w_other'].values.tolist()
+
         
         def get_connections(sources, source_target_df):
             conn = source_target_df[source_target_df['source_w_other'].isin(sources)]
@@ -205,7 +202,7 @@ if __name__ == '__main__':
             values = [v for v in conn['normalized value']]
             def get_link_color(type,target):
                 if 'Other connections' in target:
-                    return 'rgb(236,236,236)'
+                    return 'rgb(236,236,236, 0.5)'
                 if type == 1:
                     return 'rgba(255,0,0, 0.5)' 
                 return 'rgba(0,0,255,0.5)' 
@@ -213,55 +210,84 @@ if __name__ == '__main__':
             return source_code, target_code, values, link_colors
         
         def get_node_colors(sources, df):
+            cmaps = {}
+            for l in df['source layer'].unique():
+                c_df = df[~df['source_w_other'].str.startswith('Other')] # remove Other so that scaling is not messed up
+                c_df = c_df[c_df['source layer'] == layer]
+                max_value = c_df.groupby('source_w_other').mean()['value'].max()
+                min_value = c_df.groupby('source_w_other').mean()['value'].min()
+                cmap = plt.cm.ScalarMappable(norm = matplotlib.colors.Normalize(vmin = min_value, vmax=max_value), cmap='OrRd')
+                cmaps[l] = cmap
             colors = []
             for source in sources:
                 if "Other connections" in source:
-                    colors.append('rgb(236,236,236)')
+                    colors.append('rgb(236,236,236, 0.5)')
                 elif source == 'root':
                     colors.append('rgba(0,0,0,1)')
                 else:
                     source_df = df[df['source_w_other'] == source]
-                    red = source_df[source_df['type'] == 1].groupby('source_w_other').sum()['value'].values[0]
-                    blue = source_df[source_df['type'] == 0].groupby('source_w_other').sum()['value'].values[0]
-                    red = int(255*red/(red+blue))
-                    blue = int(255*blue/(red+blue))
+                    red = source_df[source_df['type'] == 1].groupby('source_w_other').mean()['value'].values[0]
+                    blue = source_df[source_df['type'] == 0].groupby('source_w_other').mean()['value'].values[0]
+
+                    intensity = (red+blue)/2
+                    cmap = cmaps[source_df['source layer'].unique()[0]]
+                    r,g,b,a = cmap.to_rgba(intensity, alpha=0.5)
                     
-                    colors.append(f'rgba({red},0,{blue},0.5)') # replace with cmap
+                    colors.append(f"rgba({r}, {g}, {b}, {a})") # replace with cmap
             return colors
         
+            
         def get_node_positions(feature_labels, df):
             """ Put residual on bottom and then sort by total outgoing value """
             x = []
             y = []
-            grouped_df = df.groupby('source_w_other', as_index=False).agg({'source layer':'min', 'value':'sum'})
+            node_sizes = []
+            grouped_df = df.groupby('source_w_other', as_index=False).agg({'source layer':'min', 'value':'mean'})
             layers = df['source layer'].unique()
             final_df = pd.DataFrame()
             for layer in layers:
+                other_df = grouped_df.loc[grouped_df['source_w_other'].str.startswith('Other')]
+                other_value = other_df.groupby('source_w_other').mean().value[0]
+                
                 layer_df = grouped_df[grouped_df['source layer']==layer].sort_values(['value'], ascending=False)
+                layer_df = layer_df.loc[~layer_df['source_w_other'].str.startswith('Other')]
                 layer_df['rank'] = range(len(layer_df.index))
-                layer_df['y'] = (1+layer_df['rank']) / (max(layer_df['rank'])+1)
-                layer_df['x'] = layer/len(layers)
-                final_df = pd.concat([final_df, layer_df])
+                layer_df['value'] = layer_df['value'] / layer_df['value'].sum()
+                layer_df['y'] = (1+layer_df['rank']*layer_df['value']) / (max(layer_df['rank']))
+                layer_df['x'] = (0.01+layer)/(len(layers)+1)
+                other_df = pd.DataFrame([[f"Other connections {layer}", layer, other_value, 10, 0.7, (0.01+layer)/(len(layers)+1)]]
+                                        ,columns = ['source_w_other','source layer', 'value', 'rank','y','x'])
+                final_df = pd.concat([final_df, layer_df, other_df])
             for f in feature_labels:
                 if f == 'root':
                     x.append(1)
                     y.append(0.5)
+                    node_sizes.append(10)
                 else:
                     x.append(final_df[final_df['source_w_other'] == f]['x'].values[0])
                     y.append(final_df[final_df['source_w_other'] == f]['y'].values[0])
+                    node_sizes.append(final_df[final_df['source_w_other'] == f]['value'].values[0])
+            print(final_df)
             return x,y
+        
         
         encoded_source, encoded_target, value, link_colors = get_connections(sources, df)
         node_colors = get_node_colors(feature_labels,df)
-
-        #x,y = get_node_positions(feature_labels,df) #not used because tis messes up
         
+        x,y = get_node_positions(feature_labels,df) #not used because tis messes up
+
+        #replace root with Output in feature labels
+        i = feature_labels.index('root')
+        feature_labels = feature_labels[:i]+['Output']+feature_labels[i+1:]
+
         nodes = dict(
-                pad = 25,
+                pad = 20,
                 thickness = 20,
                 line = dict(color = "white", width = 0),
                 label = feature_labels,
                 color = node_colors,
+                x=x,
+                y=y
                 )
         links = dict(
                 source =encoded_source,
@@ -277,7 +303,6 @@ if __name__ == '__main__':
                     textfont = dict(size=15),
                     orientation="h",
                     arrangement = "snap",
-                    domain = dict(x=[0,1], y=[0,1]),
                     node = nodes,
                     link = links)
                   ]

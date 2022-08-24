@@ -38,15 +38,18 @@ def add_edges(G, node, n_levels):
 
 
 def complete_network(G, n_levels=4):
+    nr_copies = 0
     sub_graph = nx.ego_graph(G, 'root', radius=n_levels)
     terminal_nodes = [n for n, d in sub_graph.out_degree() if d == 0]
     for node in terminal_nodes:
         distance = len(nx.shortest_path(sub_graph, source='root', target=node))
         if distance <= n_levels:
+            nr_copies = nr_copies +  n_levels - distance
             diff = n_levels - distance + 1
             sub_graph = add_edges(sub_graph, node, diff) # This just adds nodes if n_levels is longer than distance. It creates node_last_copy1, node_last_copy2 etc.
             
     # Basically, this methods adds "copy layers" if a path is shorter than n_levels. 
+    print(f"Number of copies made for {n_levels} layers: {nr_copies}")
     return sub_graph
 
 

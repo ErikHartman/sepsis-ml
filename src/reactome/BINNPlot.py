@@ -92,7 +92,7 @@ def plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss'):
         legend_title = '# layers'
     else:
         legend_title = 'Data split'
-    plt.legend(frameon=False)
+    plt.legend(title=legend_title, frameon=False)
     plt.tight_layout()
     sns.despine()
     plt.savefig(f'plots/BINN/{save_str}.jpg', dpi=300)
@@ -187,7 +187,7 @@ def plot_nodes_per_layer():
     plt.legend(title='# hidden layers', frameon=False)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
+    #plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
     
     
 
