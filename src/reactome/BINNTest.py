@@ -48,7 +48,8 @@ def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100, log_name = '', s
         protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins)
         X,y = generate_data(protein_matrix, 'data/ms', scale =scale)
     if data_split < 1:
-        X, _, y,_ = train_test_split(X,y, train_size =data_split, stratify = y)
+        X, _, y,_ = train_test_split(X,y, train_size = data_split, stratify = y)
+        print('Number of data-points: ', len(y))
     fprs = {}
     tprs = {}
     aucs = {}
@@ -142,25 +143,47 @@ def ensemble_learning(model :BINN, save_prefix='ensemble_voting', save=False, ep
     trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=epochs, save=save, save_prefix=save_prefix,  X=X_train, y=y_train)
     ensemble_voting(trained_models, torch.Tensor(X_test), torch.LongTensor(y_test))
 
-def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False):
+def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False, sparse=True):
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
     for n in n_layers_list:
-        model = BINN(sparse=True,
+        model = BINN(sparse=sparse,
                     n_layers = n,
                     learning_rate = 0.001, 
                     ms_proteins=ms_proteins,
                     activation='tanh', 
                     scheduler='plateau')
-        save_prefix = f'n_layers={n}'
+        if sparse is True:
+            save_prefix = f'n_layers={n}'
+        else:
+            save_prefix = f"DENSE_n_layers={n}"
         trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix)
     return trained_models
         
-def k_fold_with_varying_data(model :BINN, data_splits=[0.25,0.5,0.75,1], save=False, n_layers = 4):
+def k_fold_with_varying_data(model :BINN, data_splits=[0.25,0.5,0.75,1], save=False, n_layers = 4, sparse=True):
     for data_split in data_splits:
-        save_prefix = f'data_split={data_split}'
+        if sparse is True:
+            save_prefix = f'data_split={data_split}'
+        else:
+            save_prefix = f'DENSE_data_split={data_split}'
         trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix, data_split=data_split)
     return trained_models
         
+def train_on_full_data(model : BINN, save_prefix="full_data_train", save=False, epochs=100):
+    log_dir = f'logs/{save_prefix}'
+    logger = SuperLogger(log_dir, tensorboard = True, csv =  True)
+    protein_matrix = pd.read_csv('data/ms/QuantMatrix.csv')
+    protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins = model.RN.ms_proteins)
+    X,y = generate_data(protein_matrix, 'data/ms', scale =True)
+    dataloader= torch.utils.data.DataLoader(dataset= torch.utils.data.TensorDataset(torch.Tensor(X), torch.LongTensor(y)), 
+                                            batch_size = 8,
+                                            num_workers=12, 
+                                            shuffle=True)
+    trainer = Trainer(callbacks = [], logger = logger.get_logger_list(), max_epochs=epochs)
+    trainer.fit(model, dataloader)
+    if save:
+        torch.save(model, f'models/{save_prefix}.pth')
+    
+    
 if __name__ == '__main__':
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
     model = BINN(sparse=True,
@@ -168,14 +191,17 @@ if __name__ == '__main__':
                  learning_rate = 0.001, 
                  ms_proteins=ms_proteins,
                  activation='tanh', 
-                 scheduler='plateau')
-    k_fold(model, k_folds=3, epochs = 100, plot=True, save=False)
+                 scheduler='plateau', 
+                 validate=False)
+    #k_fold_with_varying_n_layers(save=True, sparse=False)
+    #k_fold(model, k_folds=3, epochs = 100, plot=False, save=False)
+    train_on_full_data(model, save=True)
     
     #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
     
     
-   # k_fold_with_varying_data(model, save=True)
-   # k_fold_with_varying_n_layers(save=True)
+    #k_fold_with_varying_data(model, save=True, sparse=False)
+
    
     #
     #early_stop_callback = EarlyStopping(monitor="val_loss", min_delta=0.001, patience=15, verbose=False, mode="min")

@@ -25,6 +25,8 @@ def generate_sequential(layer_sizes,
     layers = []
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=bias)
+        print(torch.numel(linear_layer.bias))
+        print(torch.numel(linear_layer.weight))
         layers.append((f"Layer_{n}", linear_layer)) # linear layer 
         layers.append((f"BatchNorm_{n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
         if connectivity_matrices is not None:
@@ -47,7 +49,8 @@ class BINN(LightningModule):
                  learning_rate : float = 1e-4, 
                  sparse : bool = False, 
                  n_layers : int = 4, 
-                 scheduler : str = 'plateau'):
+                 scheduler : str = 'plateau',
+                 validate=True):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
@@ -63,13 +66,14 @@ class BINN(LightningModule):
             layer_sizes.append(i)
             self.column_names.append(matrix.index)
         if sparse:
-            self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation)
+            self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation, bias=True)
         else:
-            self.layers = generate_sequential(layer_sizes, activation=activation)    
+            self.layers = generate_sequential(layer_sizes, activation=activation, bias=True)    
         init_weights(self.layers)   
         self.loss = nn.CrossEntropyLoss() 
         self.learning_rate = learning_rate 
         self.scheduler = scheduler
+        self.validate=validate
         self.save_hyperparameters()
     
     def forward(self, x):
@@ -121,6 +125,10 @@ class BINN(LightningModule):
         return parameters
                 
     def configure_optimizers(self):
+        if self.validate==True:
+            monitor='val_loss'
+        else:
+            monitor = 'train_loss'
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate, weight_decay=1e-3)
         if self.scheduler == 'plateau':
             scheduler = {"scheduler": 
@@ -129,7 +137,7 @@ class BINN(LightningModule):
                             threshold = 0.00001, 
                             mode='min', verbose=True),
                         "interval": "epoch",
-                        "monitor": "val_loss"}
+                        "monitor": monitor}
         elif self.scheduler == 'step':
             scheduler = {"scheduler": torch.optim.lr_scheduler.StepLR(optimizer, step_size=25, gamma=0.1, verbose=True)}
         return [optimizer], [scheduler]

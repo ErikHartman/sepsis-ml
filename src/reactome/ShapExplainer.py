@@ -24,10 +24,23 @@ def get_pathway_name(features):
         
         names.append(m)
     return names
-    
+
+def get_proteins_triv_name(proteins):
+    human_proteome = pd.read_csv('data/human_proteome.gz')
+    human_proteome['accession'] = human_proteome['accession'].apply(lambda x: x.split('_')[0])
+    names = []
+    for protein in proteins:
+        if protein in human_proteome['accession'].values:
+            m = human_proteome.loc[human_proteome['accession'] == protein]['trivname'].values
+            assert len(m) == 1
+            m = m[0].split('_')[0]
+        else:
+            m = protein
+        names.append(m)
+    return names
 
 if __name__ == '__main__':
-    model_file_path = 'models/test.pth'
+    model_file_path = 'models/full_data_train.pth' # This should be the model that is fully trained (i.e, all data is training data)
     model = torch.load(model_file_path)
     model.report_layer_structure()
 
@@ -81,7 +94,7 @@ if __name__ == '__main__':
                 
 
     def shap_sankey(model, background, test_data, show_top_n=10):
-        shap_dict = shap_for_layers(model, background, test_data, plot=False)
+        shap_dict = shap_for_layers(model, background, test_data, plot=True)
         feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[], 'target layer':[]}
         connectivity_matrices = model.get_connectivity_matrices()
         curr_layer = 0
@@ -104,12 +117,12 @@ if __name__ == '__main__':
                 connections = cm[cm.index == features[f]]
                 connections = connections.loc[:, (connections != 0).any(axis=0)] # get targets and append to target
                 for target in connections:
-                        feature_dict['source'].append(features[f])
-                        feature_dict['target'].append(target)
+                        feature_dict['source'].append(f"{features[f]}_{curr_layer}")
+                        feature_dict['target'].append(f"{target}_{curr_layer+1}")
                         feature_dict['value'].append(sv_mean[0][f])
                         feature_dict['type'].append(0) 
-                        feature_dict['source'].append(features[f])
-                        feature_dict['target'].append(target)
+                        feature_dict['source'].append(f"{features[f]}_{curr_layer}")
+                        feature_dict['target'].append(f"{target}_{curr_layer+1}")
                         feature_dict['value'].append(sv_mean[1][f])
                         feature_dict['type'].append(1) 
                         feature_dict['source layer'].append(curr_layer)
@@ -154,11 +167,9 @@ if __name__ == '__main__':
                 new_df = pd.concat([new_df, keep])
             return new_df
                  
-        df = remove_loops(df)
-        df = remove_double_connections(df)
+        #df = remove_loops(df)
+        #df = remove_double_connections(df)
         df = normalize_layer_values(df)
-        df['source'] = get_pathway_name(df['source'].values)
-        df['target'] = get_pathway_name(df['target'].values)
         
         def get_top_n(df, layer, n):
             """ Returns the top n (sum of shap) for layer """
@@ -175,7 +186,7 @@ if __name__ == '__main__':
         def set_to_other(row, top_n, source_or_target):
             # Set all that is not in top n to "other"
             s = row[source_or_target]
-            if s == 'root':
+            if "root_" in s:
                 return 'root'
             layer = row['source layer']
             if source_or_target == 'target':
@@ -187,7 +198,6 @@ if __name__ == '__main__':
         
         df['source_w_other'] = df.apply(lambda x: set_to_other(x, top_n, 'source'),axis=1)
         df['target_w_other']= df.apply(lambda x: set_to_other(x, top_n ,'target'),axis=1)
-        print(df)
 
         unique_features = df['source_w_other'].unique().tolist()
         unique_features += df['target_w_other'].unique().tolist()
@@ -241,7 +251,7 @@ if __name__ == '__main__':
             """ Put residual on bottom and then sort by total outgoing value """
             x = []
             y = []
-            node_sizes = []
+
             grouped_df = df.groupby('source_w_other', as_index=False).agg({'source layer':'min', 'value':'mean'})
             layers = df['source layer'].unique()
             final_df = pd.DataFrame()
@@ -253,7 +263,7 @@ if __name__ == '__main__':
                 layer_df = layer_df.loc[~layer_df['source_w_other'].str.startswith('Other')]
                 layer_df['rank'] = range(len(layer_df.index))
                 layer_df['value'] = layer_df['value'] / layer_df['value'].sum()
-                layer_df['y'] = (1+layer_df['rank']*layer_df['value']) / (max(layer_df['rank']))
+                layer_df['y'] = (1-layer_df['value']) / (max(layer_df['rank']))
                 layer_df['x'] = (0.01+layer)/(len(layers)+1)
                 other_df = pd.DataFrame([[f"Other connections {layer}", layer, other_value, 10, 0.7, (0.01+layer)/(len(layers)+1)]]
                                         ,columns = ['source_w_other','source layer', 'value', 'rank','y','x'])
@@ -262,23 +272,22 @@ if __name__ == '__main__':
                 if f == 'root':
                     x.append(1)
                     y.append(0.5)
-                    node_sizes.append(10)
                 else:
                     x.append(final_df[final_df['source_w_other'] == f]['x'].values[0])
                     y.append(final_df[final_df['source_w_other'] == f]['y'].values[0])
-                    node_sizes.append(final_df[final_df['source_w_other'] == f]['value'].values[0])
-            print(final_df)
             return x,y
         
         
         encoded_source, encoded_target, value, link_colors = get_connections(sources, df)
         node_colors = get_node_colors(feature_labels,df)
-        
-        x,y = get_node_positions(feature_labels,df) #not used because tis messes up
+        x,y = get_node_positions(feature_labels,df)
 
-        #replace root with Output in feature labels
+        # format text
         i = feature_labels.index('root')
         feature_labels = feature_labels[:i]+['Output']+feature_labels[i+1:]
+        feature_labels = [f.split("_")[0] for f in feature_labels] 
+        feature_labels = get_pathway_name(feature_labels)
+        feature_labels = get_proteins_triv_name(feature_labels)
 
         nodes = dict(
                 pad = 20,
