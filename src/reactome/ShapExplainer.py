@@ -78,12 +78,13 @@ if __name__ == '__main__':
             if isinstance(layer, nn.Linear):
                 feature_names = model.column_names[feature_index]
                 feature_names = get_pathway_name(feature_names)
+                feature_names = get_proteins_triv_name(feature_names)
                 explainer = shap.DeepExplainer((model, layer), background)
                 shap_values = explainer.shap_values(test_data)
                 shap_dict['features'].append(model.column_names[feature_index])
                 shap_dict['shap_values'].append(shap_values)
                 if plot:
-                    shap.summary_plot(shap_values, intermediate_data, feature_names = feature_names, plot_size=[12,6])
+                    shap.summary_plot(shap_values, intermediate_data, feature_names = feature_names, max_display=30, plot_size=[15,6])
                     plt.savefig(f'plots/shap/SHAP_layer_{feature_index}.jpg', dpi=200)
                 feature_index += 1
                 plt.clf()
@@ -132,6 +133,14 @@ if __name__ == '__main__':
             curr_layer += 1
         n_layers = curr_layer      
         df = pd.DataFrame(data=feature_dict)
+        
+        def save_as_csv(df_csv):
+            df_csv['source'] = df_csv['source'].apply(lambda x: x.split('_')[0])
+            df_csv['target'] = df_csv['target'].apply(lambda x: x.split('_')[0])
+            df_csv['source'] = get_proteins_triv_name(df_csv['source'].values)
+            df_csv['source'] = get_pathway_name(df_csv['source'].values)
+            df_csv['target'] = get_pathway_name(df_csv['target'].values)
+            df_csv.to_csv('ShapConnections.csv')
         
         def normalize_layer_values(df):
             new_df = pd.DataFrame()
@@ -224,9 +233,9 @@ if __name__ == '__main__':
             for l in df['source layer'].unique():
                 c_df = df[~df['source_w_other'].str.startswith('Other')] # remove Other so that scaling is not messed up
                 c_df = c_df[c_df['source layer'] == layer]
-                max_value = c_df.groupby('source_w_other').mean()['value'].max()
-                min_value = c_df.groupby('source_w_other').mean()['value'].min()
-                cmap = plt.cm.ScalarMappable(norm = matplotlib.colors.Normalize(vmin = min_value, vmax=max_value), cmap='OrRd')
+                max_value = c_df.groupby('source_w_other').mean()['value'].max()*2
+                min_value = c_df.groupby('source_w_other').mean()['value'].min()*0.1
+                cmap = plt.cm.ScalarMappable(norm = matplotlib.colors.Normalize(vmin = min_value, vmax=max_value), cmap='Reds')
                 cmaps[l] = cmap
             colors = []
             for source in sources:
@@ -236,14 +245,10 @@ if __name__ == '__main__':
                     colors.append('rgba(0,0,0,1)')
                 else:
                     source_df = df[df['source_w_other'] == source]
-                    red = source_df[source_df['type'] == 1].groupby('source_w_other').mean()['value'].values[0]
-                    blue = source_df[source_df['type'] == 0].groupby('source_w_other').mean()['value'].values[0]
-
-                    intensity = (red+blue)/2
+                    intensity = source_df.groupby('source_w_other').mean()['value'].values[0]
                     cmap = cmaps[source_df['source layer'].unique()[0]]
                     r,g,b,a = cmap.to_rgba(intensity, alpha=0.5)
-                    
-                    colors.append(f"rgba({r}, {g}, {b}, {a})") # replace with cmap
+                    colors.append(f"rgba({r*255}, {g*255}, {b*255}, {a})") 
             return colors
         
             
@@ -279,8 +284,8 @@ if __name__ == '__main__':
         
         
         encoded_source, encoded_target, value, link_colors = get_connections(sources, df)
-        node_colors = get_node_colors(feature_labels,df)
-        x,y = get_node_positions(feature_labels,df)
+        node_colors = get_node_colors(feature_labels, df)
+        x,y = get_node_positions(feature_labels, df)
 
         # format text
         i = feature_labels.index('root')

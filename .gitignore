@@ -6,3 +6,6 @@ lightning_logs
 data/reactome/
 models
 logs
+data/human_proteome.gz
+ShapConnections.csv
+*pptx

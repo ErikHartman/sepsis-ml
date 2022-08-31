@@ -114,7 +114,7 @@ def k_fold_roc(classifiers, X, y, n_splits=3):
         mean_auc = metrics.auc(mean_fpr, mean_tpr)
         std_auc = np.std(aucs)
         
-        plt.plot(mean_fpr,mean_tpr, label=f"{name}: {mean_auc :.2f} \u00B1 {std_auc : .2f}", alpha=0.8, color=colors[k])
+        plt.plot(mean_fpr,mean_tpr, label=f"{name}: {mean_auc :.2f} \u00B1 {std_auc : .2f}", alpha=1, color=colors[k])
         std_tpr = np.std(tprs, axis=0)
         tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
         tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
@@ -152,6 +152,6 @@ if __name__ == '__main__':
     
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2)
     X_train, y_train, protein_labels = prepare_data(scale=True)
-    k_fold_confusion_matrices(classifiers, X_train, y_train)
+    #k_fold_confusion_matrices(classifiers, X_train, y_train)
     #shap_summary_plot(classifiers, name = 'XGBoost', X = X_train,feature_names = protein_labels)
     k_fold_roc(classifiers, X_train, y_train)
