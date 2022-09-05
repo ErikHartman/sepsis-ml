@@ -13,8 +13,8 @@ import torch
 def generate_protein_matrix(MS_DATA_PATH = "data/ms", save=False):
     print("Generating protein matrix...")
     quant_matrix = QuantMatrix(
-        quantification_file=f"{MS_DATA_PATH}/220316_ghost_nrt_filtered.tsv",
-        design_matrix_file=f"{MS_DATA_PATH}/design_matrix_group_de_early_time_points_subtypes.tsv"
+        quantification_file=f"{MS_DATA_PATH}/inner.tsv",
+        design_matrix_file=f"{MS_DATA_PATH}/inner_design_matrix.tsv"
     )
     df = (
         quant_matrix
@@ -47,8 +47,8 @@ def fit_protein_matrix_to_network_input(protein_matrix, RN_proteins):
         protein_matrix = protein_matrix.loc[RN_proteins]
     return protein_matrix
 
-def generate_data(protein_matrix, MS_DATA_PATH, scale=False):
-    design_matrix = pd.read_csv(f'{MS_DATA_PATH}/design_matrix_group_de_early_time_points_subtypes.tsv', sep='\t')
+def generate_data(protein_matrix, MS_DATA_PATH, design_matrix="data/ms/inner_design_matrix.tsv", scale=False):
+    design_matrix = pd.read_csv(design_matrix, sep='\t')
     GroupOneCols = design_matrix[design_matrix['Group'] == 1]['Sample'].values
     GroupTwoCols = design_matrix[design_matrix['Group'] == 2]['Sample'].values
     df1 = protein_matrix[GroupOneCols].T

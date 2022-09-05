@@ -183,21 +183,27 @@ def plot_nodes_per_layer():
     fig, ax = plt.subplots(figsize=(3,3))
     sns.lineplot(data=nodes, x ='layer', y='number_of_nodes', hue='n_layers', palette='vlag',marker='o')
     plt.ylabel('# nodes')
-    plt.xalbel('Hidden layer')
+    plt.xlabel('Hidden layer')
     plt.legend(title='# hidden layers', frameon=False)
     sns.despine()
     plt.tight_layout()
-    #plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
+    plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
     
     
 
 
         
 if __name__ == '__main__':
-   # plot_val_loss(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplit')
-    #plot_val_loss(test_type = 'data_split', save_str = 'DataSplit')
+    plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')
+    plot_val_loss(test_type = 'data_split', save_str = 'DataSplitValLoss')
     #plot_trainable_parameters_over_layers()    
     #plot_performance_of_ensemble('ensemble_voting', 'logs/ensemble_voting/accuracy.csv') # switch this to averaged results and k_means
-    plot_val_acc(test_type = 'DENSE_data_split', save_str='DENSEDataSplitValAcc')
+    plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
+    plot_val_acc(test_type = 'data_split', save_str = 'DataSplitValAcc')
+    
+    plot_val_loss(test_type = 'DENSE_n_layers', save_str = 'DENSENLayersValLoss')
+    plot_val_loss(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValLoss')
+    plot_val_acc(test_type = 'DENSE_n_layers', save_str='DENSENLayersValAcc')
+    plot_val_acc(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValAcc')
     #plot_trainable_parameters_over_layers()
     #plot_nodes_per_layer()

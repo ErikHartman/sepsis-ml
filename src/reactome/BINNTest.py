@@ -40,7 +40,7 @@ def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = Fals
         plt.clf()
 
     
-def k_fold(model :  BINN,  k_folds = 4, scale=True, epochs=100, log_name = '', save=False, save_prefix='', data_split=1.0, X=None, y=None, plot=False):
+def k_fold(model :  BINN,  k_folds = 5, scale=True, epochs=100, log_name = '', save=False, save_prefix='', data_split=1.0, X=None, y=None, plot=False):
     trained_models = []
     RN_proteins = model.RN.ms_proteins
     if X is None:
@@ -143,7 +143,7 @@ def ensemble_learning(model :BINN, save_prefix='ensemble_voting', save=False, ep
     trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=epochs, save=save, save_prefix=save_prefix,  X=X_train, y=y_train)
     ensemble_voting(trained_models, torch.Tensor(X_test), torch.LongTensor(y_test))
 
-def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False, sparse=True):
+def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False, sparse=True, weight = 100/torch.Tensor([74,123])):
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
     for n in n_layers_list:
         model = BINN(sparse=sparse,
@@ -151,21 +151,22 @@ def k_fold_with_varying_n_layers(n_layers_list=  [3,4,5,6], save=False, sparse=T
                     learning_rate = 0.001, 
                     ms_proteins=ms_proteins,
                     activation='tanh', 
-                    scheduler='plateau')
+                    scheduler='plateau',
+                    weight = weight)
         if sparse is True:
             save_prefix = f'n_layers={n}'
         else:
             save_prefix = f"DENSE_n_layers={n}"
-        trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix)
+        trained_models = k_fold(model, log_name=save_prefix, k_folds=5, scale=True, epochs=100, save=save, save_prefix=save_prefix)
     return trained_models
         
-def k_fold_with_varying_data(model :BINN, data_splits=[0.25,0.5,0.75,1], save=False, n_layers = 4, sparse=True):
+def k_fold_with_varying_data(model :BINN, data_splits=[0.2, 0.4, 0.6, 0.8 ,1], save=False, sparse=True):
     for data_split in data_splits:
         if sparse is True:
             save_prefix = f'data_split={data_split}'
         else:
             save_prefix = f'DENSE_data_split={data_split}'
-        trained_models = k_fold(model, log_name=save_prefix, k_folds=3, scale=True, epochs=100, save=save, save_prefix=save_prefix, data_split=data_split)
+        trained_models = k_fold(model, log_name=save_prefix, k_folds=5, scale=True, epochs=100, save=save, save_prefix=save_prefix, data_split=data_split)
     return trained_models
         
 def train_on_full_data(model : BINN, save_prefix="full_data_train", save=False, epochs=100):
@@ -185,22 +186,25 @@ def train_on_full_data(model : BINN, save_prefix="full_data_train", save=False, 
     
     
 if __name__ == '__main__':
+    weight = 100 / torch.Tensor([74,123]) # class weights
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    model = BINN(sparse=True,
+    model = BINN(sparse=False,
                  n_layers = 4,
                  learning_rate = 0.001, 
                  ms_proteins=ms_proteins,
                  activation='tanh', 
                  scheduler='plateau', 
-                 validate=False)
-    #k_fold_with_varying_n_layers(save=True, sparse=False)
-    #k_fold(model, k_folds=3, epochs = 100, plot=False, save=False)
-    train_on_full_data(model, save=True)
+                 validate=False, 
+                 weight = weight)
+    model.report_layer_structure(verbose=True)
+    #k_fold(model, k_folds=5, epochs = 100, plot=True, save=True)
+    k_fold_with_varying_n_layers(save=True, sparse=False, n_layers_list=[6])
+    #train_on_full_data(model, save=True)
     
     #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
     
     
-    #k_fold_with_varying_data(model, save=True, sparse=False)
+    k_fold_with_varying_data(model, save=True, sparse=False)
 
    
     #

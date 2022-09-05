@@ -42,7 +42,7 @@ def get_proteins_triv_name(proteins):
 if __name__ == '__main__':
     model_file_path = 'models/full_data_train.pth' # This should be the model that is fully trained (i.e, all data is training data)
     model = torch.load(model_file_path)
-    model.report_layer_structure()
+    model.report_layer_structure(verbose=True)
 
 
     feature_names = model.column_names[0]
@@ -52,7 +52,8 @@ if __name__ == '__main__':
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins = model.RN.ms_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale = True)
 
-    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size = 0.3)
+    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size = 0.3, stratify = y)
+    print(len(y_test) + len(y_train))
     X_test = torch.Tensor(X_test)
     y_test = torch.LongTensor(y_test)
     X_train = torch.Tensor(X_train)
@@ -141,7 +142,7 @@ if __name__ == '__main__':
             df_csv['source'] = get_pathway_name(df_csv['source'].values)
             df_csv['target'] = get_pathway_name(df_csv['target'].values)
             df_csv.to_csv('ShapConnections.csv')
-        
+        #save_as_csv(df)
         def normalize_layer_values(df):
             new_df = pd.DataFrame()
             total_value_sum = df['value'].sum()
@@ -233,8 +234,8 @@ if __name__ == '__main__':
             for l in df['source layer'].unique():
                 c_df = df[~df['source_w_other'].str.startswith('Other')] # remove Other so that scaling is not messed up
                 c_df = c_df[c_df['source layer'] == layer]
-                max_value = c_df.groupby('source_w_other').mean()['value'].max()*2
-                min_value = c_df.groupby('source_w_other').mean()['value'].min()*0.1
+                max_value = c_df.groupby('source_w_other').mean()['value'].max()*1.2
+                min_value = c_df.groupby('source_w_other').mean()['value'].min()*0.01
                 cmap = plt.cm.ScalarMappable(norm = matplotlib.colors.Normalize(vmin = min_value, vmax=max_value), cmap='Reds')
                 cmaps[l] = cmap
             colors = []
@@ -273,13 +274,16 @@ if __name__ == '__main__':
                 other_df = pd.DataFrame([[f"Other connections {layer}", layer, other_value, 10, 0.7, (0.01+layer)/(len(layers)+1)]]
                                         ,columns = ['source_w_other','source layer', 'value', 'rank','y','x'])
                 final_df = pd.concat([final_df, layer_df, other_df])
+            print(final_df)
             for f in feature_labels:
                 if f == 'root':
                     x.append(1)
                     y.append(0.5)
                 else:
+                    
                     x.append(final_df[final_df['source_w_other'] == f]['x'].values[0])
                     y.append(final_df[final_df['source_w_other'] == f]['y'].values[0])
+   
             return x,y
         
         

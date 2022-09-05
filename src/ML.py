@@ -8,7 +8,9 @@ from sklearn.neighbors import KNeighborsClassifier
 import xgboost
 import numpy as np
 import seaborn as sns
+import pandas as pd
 from sklearn import metrics
+import torch
 
 import shap
 from sklearn.model_selection import StratifiedKFold
@@ -147,11 +149,43 @@ def shap_summary_plot(classifiers, name, X, feature_names,):
     shap.summary_plot(shap_values, features=X, cmap=plt.cm.coolwarm, feature_names=  feature_names, max_display=8, plot_size=(5,3))
     plt.tight_layout()
     plt.savefig(f'plots/ML/Shap{name}.jpg', dpi=300)
+    
+    
+    
+    
+def vote_on_NaN(classifiers, X):
+    #TODO: This experiment
+    X_nan, y_nan, protein_labels = prepare_data(quantification_file = 'data/ms/NAN_inner.tsv', 
+                                                design_matrix = 'data/ms/NAN_inner_design_matrix.tsv', compare=False)
+    # need to align X_nan and X (use protein labels)
+    torch_X_nan = torch.Tensor(X_nan)
+    model_file_path = 'models/full_data_train.pth'
+    BINN = torch.load(model_file_path)
+    results = {'BINN' : [],  
+               'Support Vector Machine': [],
+                'K-Nearest Neighbour': [],
+                'Random Forest': [],
+                'LightGBM': [],
+                'XGBoost':[],
+            }
+    for classifier in classifiers.keys():
+        clf = classifiers[classifier]
+        clf.fit(X)
+        pred = clf.predict(X_nan)
+        results[classifier] = pred
+    pred = BINN(torch_X_nan)
+    y_hat = torch.argmax(y_hat, dim=1).numpy().tolist()
+    results['BINN'].append(y_hat)
+    print(results)
+    df = pd.DataFrame(results)
+    print(df)
 
 if __name__ == '__main__':
     
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2)
     X_train, y_train, protein_labels = prepare_data(scale=True)
+    
+    vote_on_NaN(classifiers, X_train)
     #k_fold_confusion_matrices(classifiers, X_train, y_train)
     #shap_summary_plot(classifiers, name = 'XGBoost', X = X_train,feature_names = protein_labels)
-    k_fold_roc(classifiers, X_train, y_train)
+    #k_fold_roc(classifiers, X_train, y_train)

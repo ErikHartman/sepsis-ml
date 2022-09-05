@@ -46,6 +46,7 @@ class BINN(LightningModule):
     def __init__(self, 
                  ms_proteins : list = [], 
                  activation : str = 'tanh', 
+                 weight = torch.Tensor([1,1]),
                  learning_rate : float = 1e-4, 
                  sparse : bool = False, 
                  n_layers : int = 4, 
@@ -70,7 +71,7 @@ class BINN(LightningModule):
         else:
             self.layers = generate_sequential(layer_sizes, activation=activation, bias=True)    
         init_weights(self.layers)   
-        self.loss = nn.CrossEntropyLoss() 
+        self.loss = nn.CrossEntropyLoss(weight=weight) 
         self.learning_rate = learning_rate 
         self.scheduler = scheduler
         self.validate=validate
