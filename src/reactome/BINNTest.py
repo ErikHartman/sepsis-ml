@@ -188,7 +188,7 @@ def train_on_full_data(model : BINN, save_prefix="full_data_train", save=False, 
 if __name__ == '__main__':
     weight = 100 / torch.Tensor([74,123]) # class weights
     ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    model = BINN(sparse=False,
+    model = BINN(sparse=True,
                  n_layers = 4,
                  learning_rate = 0.001, 
                  ms_proteins=ms_proteins,
@@ -197,14 +197,14 @@ if __name__ == '__main__':
                  validate=False, 
                  weight = weight)
     model.report_layer_structure(verbose=True)
-    #k_fold(model, k_folds=5, epochs = 100, plot=True, save=True)
-    k_fold_with_varying_n_layers(save=True, sparse=False, n_layers_list=[6])
+    k_fold(model, k_folds=5, epochs = 100, plot=True, save=True)
+    #k_fold_with_varying_n_layers(save=True, sparse=True)
     #train_on_full_data(model, save=True)
     
     #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
     
     
-    k_fold_with_varying_data(model, save=True, sparse=False)
+    #k_fold_with_varying_data(model, save=True, sparse=False)
 
    
     #

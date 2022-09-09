@@ -112,17 +112,20 @@ class BINN(LightningModule):
     def report_layer_structure(self, verbose=False):
         if verbose:
             print(self.layers)
-        parameters = {'nz weights':[], 'weights':[]}
+        parameters = {'nz weights':[], 'weights':[], 'biases':[]}
         for i, l in enumerate(self.layers):
             if isinstance(l,nn.Linear):
                 nz_weights = torch.count_nonzero(l.weight)
                 weights = torch.numel(l.weight)
+                biases = torch.numel(l.bias)
                 if verbose:
                     print(f"Layer {i}")
-                    print(f"Number of nonzero elements: {nz_weights} ")
-                    print(f"Total number of elements: {weights} ")
+                    print(f"Number of nonzero weights: {nz_weights} ")
+                    print(f"Number biases: {nz_weights} ")
+                    print(f"Total number of elements: {weights+biases} ")
                 parameters['nz weights'].append(nz_weights)
                 parameters['weights'].append(weights)
+                parameters['biases'].append(biases)
         return parameters
                 
     def configure_optimizers(self):

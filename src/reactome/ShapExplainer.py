@@ -39,6 +39,19 @@ def get_proteins_triv_name(proteins):
         names.append(m)
     return names
 
+def get_shorter_names(long_names : list[str]):
+    translate = pd.read_csv('ShapShort.csv')
+    names = []
+    for long_name in long_names:
+        long_name = long_name.replace(',', '')
+        if long_name in translate['long'].values:
+            short_name = translate.loc[translate['long'] == long_name]['short'].values[0].strip("\"")
+        else:
+            print("Not found: ", long_name)
+            short_name = long_name
+        names.append(short_name)
+    return names
+
 if __name__ == '__main__':
     model_file_path = 'models/full_data_train.pth' # This should be the model that is fully trained (i.e, all data is training data)
     model = torch.load(model_file_path)
@@ -52,8 +65,9 @@ if __name__ == '__main__':
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins = model.RN.ms_proteins)
     X,y = generate_data(protein_matrix, 'data/ms', scale = True)
 
-    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size = 0.3, stratify = y)
+    X_train, X_test, y_train, y_test = train_test_split(X,y,test_size = 0.3, stratify = y, random_state=42)
     print(len(y_test) + len(y_train))
+    print(sum(y_test)/len(y_test), sum(y_train)/len(y_train))
     X_test = torch.Tensor(X_test)
     y_test = torch.LongTensor(y_test)
     X_train = torch.Tensor(X_train)
@@ -96,7 +110,7 @@ if __name__ == '__main__':
                 
 
     def shap_sankey(model, background, test_data, show_top_n=10):
-        shap_dict = shap_for_layers(model, background, test_data, plot=True)
+        shap_dict = shap_for_layers(model, background, test_data, plot=False)
         feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[], 'target layer':[]}
         connectivity_matrices = model.get_connectivity_matrices()
         curr_layer = 0
@@ -135,13 +149,49 @@ if __name__ == '__main__':
         n_layers = curr_layer      
         df = pd.DataFrame(data=feature_dict)
         
-        def save_as_csv(df_csv):
+        def plot_shap_ratio(df, n):
+            for layer in df['source layer'].unique():
+                shap_ratios = {'sources':[], 'ratio':[], 'mean':[], 'colors':[]}
+                plt.clf()
+                l = df.loc[df['source layer'] == layer]
+                for source in l['source'].unique():
+                    s = l.loc[l['source'] == source]
+                    val_0 = s.loc[s['type'] == 0]['value'].values[0]
+                    val_1 = s.loc[s['type'] == 1]['value'].values[0]
+                    ratio = max(val_1/val_0, val_0/val_1)
+                    if '_' in source:
+                        source = source.split('_')[0]
+                    if val_1/val_0 > val_0/val_1:
+                        color = 'blue'
+                    else:
+                        color ='red'
+                    shap_ratios['sources'].append(source)
+                    shap_ratios['ratio'].append(ratio)
+                    shap_ratios['mean'].append(val_0+val_1)
+                    shap_ratios['colors'].append(color)
+
+                shap_ratios = pd.DataFrame(shap_ratios)
+
+                shap_ratios.sort_values('mean', ascending=False, inplace=True)
+                shap_ratios = shap_ratios[0:n]
+                shap_ratios['sources'] = get_proteins_triv_name(shap_ratios['sources'].values.tolist())
+                shap_ratios['sources'] = get_pathway_name(shap_ratios['sources'].values.tolist())
+                plt.bar(x = shap_ratios['sources'].values, height=shap_ratios['ratio'].values, color=shap_ratios['colors'].values)
+                plt.xticks(rotation = 90)
+                plt.tight_layout()
+                plt.savefig(f'plots/shap/ratio_layer{layer}.jpg',bbox_inches='tight', dpi=300)
+                
+        #plot_shap_ratio(df, 30)
+        
+        def save_as_csv(df):
+            df_csv = df.copy()
             df_csv['source'] = df_csv['source'].apply(lambda x: x.split('_')[0])
             df_csv['target'] = df_csv['target'].apply(lambda x: x.split('_')[0])
             df_csv['source'] = get_proteins_triv_name(df_csv['source'].values)
             df_csv['source'] = get_pathway_name(df_csv['source'].values)
             df_csv['target'] = get_pathway_name(df_csv['target'].values)
             df_csv.to_csv('ShapConnections.csv')
+            
         #save_as_csv(df)
         def normalize_layer_values(df):
             new_df = pd.DataFrame()
@@ -297,7 +347,7 @@ if __name__ == '__main__':
         feature_labels = [f.split("_")[0] for f in feature_labels] 
         feature_labels = get_pathway_name(feature_labels)
         feature_labels = get_proteins_triv_name(feature_labels)
-
+        feature_labels = get_shorter_names(feature_labels)
         nodes = dict(
                 pad = 20,
                 thickness = 20,
@@ -318,14 +368,14 @@ if __name__ == '__main__':
             data=[
                 go.Sankey(
                     
-                    textfont = dict(size=15),
+                    textfont = dict(size=15,family='Arial'),
                     orientation="h",
                     arrangement = "snap",
                     node = nodes,
                     link = links)
                   ]
             )
-        fig.write_image('plots/BINN/ShapSankey.png', width=1900, height=1000, scale=3)
+        fig.write_image('plots/BINN/ShapSankey.png', width=2000, height=1000)
         
   
     #shap_for_layers(model, background, test_data)

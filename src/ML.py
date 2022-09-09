@@ -25,7 +25,7 @@ classifiers = {
 short_names =  ['SVM','k-NN','RF','LGBM','XGB']
 
 
-def k_fold_confusion_matrices(classifiers, X, y, n_splits = 3):
+def k_fold_confusion_matrices(classifiers, X, y, n_splits = 5):
     plt.clf()
     
     def generate_confusion_matrix(classifier, X_test, y_test):
@@ -92,7 +92,7 @@ def k_fold_confusion_matrices(classifiers, X, y, n_splits = 3):
     plt.tight_layout()
     plt.savefig('plots/ML/ConfusionMatrices.jpg', dpi=300)
 
-def k_fold_roc(classifiers, X, y, n_splits=3):
+def k_fold_roc(classifiers, X, y, n_splits=5):
     plt.clf()
     cv = StratifiedKFold(n_splits=n_splits)
     colors = plt.cm.coolwarm(np.linspace(0,1,len(classifiers.keys())))
@@ -183,9 +183,9 @@ def vote_on_NaN(classifiers, X):
 if __name__ == '__main__':
     
     cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2)
-    X_train, y_train, protein_labels = prepare_data(scale=True)
+    X_train, y_train, protein_labels = prepare_data(scale=True, compare=True)
     
-    vote_on_NaN(classifiers, X_train)
-    #k_fold_confusion_matrices(classifiers, X_train, y_train)
+    
+    k_fold_confusion_matrices(classifiers, X_train, y_train)
     #shap_summary_plot(classifiers, name = 'XGBoost', X = X_train,feature_names = protein_labels)
-    #k_fold_roc(classifiers, X_train, y_train)
+    k_fold_roc(classifiers, X_train, y_train)

@@ -36,7 +36,7 @@ def plot_confusion_matrix(confusion_matrices, save_str):
     cm_std = [[np.std(cm['TP']), np.std(cm['FP'])], [np.std(cm['FN']), np.std(cm['TN'])]]
     labels = [ [f'{cm_mean[0][0] : .0f}\u00B1{cm_std[0][0]: .0f}%',f'{cm_mean[0][1]: .0f}\u00B1{cm_std[0][1]: .0f}%' ],
                  [f'{cm_mean[1][0]: .0f}\u00B1{cm_std[1][0]: .0f}%',f'{cm_mean[1][1]: .0f}\u00B1{cm_std[1][1]: .0f}%' ]]
-    fig, ax = plt.subplots(figsize=(4,3))
+    fig, ax = plt.subplots(figsize=(3,3))
     sns.heatmap(cm_mean, annot=labels, fmt="", cmap='coolwarm', cbar=False, alpha=0.8)
     plt.tight_layout()
     plt.xticks([0.5,1.5], ['Positive','Negative'])
@@ -57,7 +57,7 @@ def plot_roc_curve(fprs, tprs, aucs, save_str):
     std_auc= np.std(aucs, axis=0)
     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-    fig, ax = plt.subplots(figsize=(4,3))
+    fig, ax = plt.subplots(figsize=(3,3))
     plt.plot(mean_fpr, mean_tpr, label=f"BINN: {mean_auc : .2f} \u00B1 {std_auc : .2f}")
     ax.fill_between(
         mean_fpr,
@@ -83,8 +83,8 @@ def plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss'):
         m[test_type] = float(d.split('=')[-1])
         metrics = pd.concat([metrics, m])
     metrics.reset_index(inplace=True, drop=True)
-    plt.figure(figsize=(5,3))
-    ax = sns.lineplot(data=metrics, x='epoch',y='val_loss', hue=test_type, palette='rocket', ci='sd', err_style='band', alpha=0.8)
+    plt.figure(figsize=(3,3))
+    ax = sns.lineplot(data=metrics, x='epoch',y='val_loss', hue=test_type, palette='Reds', ci='sd', err_style='band', alpha=0.8)
     plt.ylabel('Validation loss')
     plt.xlabel('Epoch')
     if 'n_layers' in test_type:
@@ -93,6 +93,7 @@ def plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss'):
         legend_title = 'Data split'
     plt.legend(title=legend_title, frameon=False)
     plt.tight_layout()
+    plt.ylim([0,1])
     sns.despine()
     plt.savefig(f'plots/BINN/{save_str}.jpg', dpi=300)
     
@@ -105,15 +106,18 @@ def plot_val_acc(test_type = 'n_layers', save_str = 'NLayersValLoss'):
         m[test_type] = float(d.split('=')[-1])
         metrics = pd.concat([metrics, m])
     metrics.reset_index(inplace=True, drop=True)
-    plt.figure(figsize=(5,3))
-    g = sns.barplot(data=metrics, x=test_type, y='val_acc', hue=test_type, palette='rocket', ci='sd', alpha=0.8, dodge=False)
+    plt.figure(figsize=(3,3))
+    print(metrics)
+    g = sns.lineplot(data=metrics, x='epoch', y='val_acc', hue=test_type, palette='Blues', ci='sd', alpha=0.8)
     if test_type == 'n_layers':
-        plt.xlabel('# layers')
+        legend_title = '# layers'
     else:
-        plt.xlabel('Data split')
+        legend_title = 'Data split'
+    plt.legend(title=legend_title, frameon=False)
+    plt.xlabel('Epoch')
     plt.ylabel('Validation accuracy')
     plt.tight_layout()
-    g.legend_.remove()
+    plt.ylim([0,1.1])
     sns.despine()
     plt.savefig(f'plots/BINN/{save_str}.jpg', dpi=300)
     
@@ -131,8 +135,8 @@ def plot_trainable_parameters_over_layers():
                     activation='tanh', 
                     scheduler='plateau')
         parameters = model.report_layer_structure()
-        sparse_parameters = sum(parameters['nz weights']) * 2 # 2 for both weights and biases
-        dense_parameters = sum(parameters['weights']) * 2  
+        sparse_parameters = sum(parameters['nz weights'])  + sum(parameters['biases'])
+        dense_parameters = sum(parameters['weights'])  + sum(parameters['biases'])
         trainable_params['n'].append(n_layers)
         trainable_params['sparse_params'].append(sparse_parameters)
         trainable_params['dense_params'].append(dense_parameters)
@@ -194,16 +198,16 @@ def plot_nodes_per_layer():
 
         
 if __name__ == '__main__':
-    plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')
-    plot_val_loss(test_type = 'data_split', save_str = 'DataSplitValLoss')
-    #plot_trainable_parameters_over_layers()    
+    # plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')
+    # plot_val_loss(test_type = 'data_split', save_str = 'DataSplitValLoss')
+    plot_trainable_parameters_over_layers()    
     #plot_performance_of_ensemble('ensemble_voting', 'logs/ensemble_voting/accuracy.csv') # switch this to averaged results and k_means
-    plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
-    plot_val_acc(test_type = 'data_split', save_str = 'DataSplitValAcc')
+    # plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
+    # plot_val_acc(test_type = 'data_split', save_str = 'DataSplitValAcc')
     
-    plot_val_loss(test_type = 'DENSE_n_layers', save_str = 'DENSENLayersValLoss')
-    plot_val_loss(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValLoss')
-    plot_val_acc(test_type = 'DENSE_n_layers', save_str='DENSENLayersValAcc')
-    plot_val_acc(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValAcc')
+    # plot_val_loss(test_type = 'DENSE_n_layers', save_str = 'DENSENLayersValLoss')
+    # plot_val_loss(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValLoss')
+    # plot_val_acc(test_type = 'DENSE_n_layers', save_str='DENSENLayersValAcc')
+    # plot_val_acc(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValAcc')
     #plot_trainable_parameters_over_layers()
     #plot_nodes_per_layer()
