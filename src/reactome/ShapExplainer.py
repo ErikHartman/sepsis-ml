@@ -273,7 +273,7 @@ if __name__ == '__main__':
             def get_link_color(type,target):
                 if 'Other connections' in target:
                     return 'rgb(236,236,236, 0.5)'
-                if type == 1:
+                if type == 0:
                     return 'rgba(255,0,0, 0.5)' 
                 return 'rgba(0,0,255,0.5)' 
             link_colors = [get_link_color(c,t) for c,t in zip(conn['type'], conn['target_w_other'])]
@@ -375,7 +375,7 @@ if __name__ == '__main__':
                     link = links)
                   ]
             )
-        fig.write_image('plots/BINN/ShapSankey.png', width=2000, height=1000)
+        fig.write_image('plots/BINN/ShapSankey.png', width=1750, scale=3, height=1000)
         
   
     #shap_for_layers(model, background, test_data)

@@ -105,9 +105,11 @@ def plot_val_acc(test_type = 'n_layers', save_str = 'NLayersValLoss'):
         m = get_metrics_for_dir(d)
         m[test_type] = float(d.split('=')[-1])
         metrics = pd.concat([metrics, m])
+        print(f"{d}")
+        print(f"Mean accuracy: {(metrics[metrics['epoch'] == 99]['val_acc'].mean())}, {(metrics[metrics['epoch'] == 99]['val_acc'].std())}")
     metrics.reset_index(inplace=True, drop=True)
     plt.figure(figsize=(3,3))
-    print(metrics)
+    
     g = sns.lineplot(data=metrics, x='epoch', y='val_acc', hue=test_type, palette='Blues', ci='sd', alpha=0.8)
     if test_type == 'n_layers':
         legend_title = '# layers'
@@ -119,7 +121,7 @@ def plot_val_acc(test_type = 'n_layers', save_str = 'NLayersValLoss'):
     plt.tight_layout()
     plt.ylim([0,1.1])
     sns.despine()
-    plt.savefig(f'plots/BINN/{save_str}.jpg', dpi=300)
+    #plt.savefig(f'plots/BINN/{save_str}.jpg', dpi=300)
     
     
 
@@ -193,16 +195,24 @@ def plot_nodes_per_layer():
     plt.tight_layout()
     plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
     
+def plot_copies():
+    copies = [0, 0, 72, 367, 1189, 2452] #hardcoded for ease
+    fig, ax = plt.subplots(figsize=(3,3))
+    sns.lineplot(x = [2,3,4,5,6,7], y = copies, marker  = 'o')
+    plt.ylabel('Induced copies in the network')
+    plt.xlabel('Number of hidden layers')
+    sns.despine()
+    plt.tight_layout()
+    plt.savefig('plots/BINN/Copies.eps', dpi=400)
     
-
 
         
 if __name__ == '__main__':
     # plot_val_loss(test_type = 'n_layers', save_str = 'NLayersValLoss')
     # plot_val_loss(test_type = 'data_split', save_str = 'DataSplitValLoss')
-    plot_trainable_parameters_over_layers()    
+    #plot_trainable_parameters_over_layers()    
     #plot_performance_of_ensemble('ensemble_voting', 'logs/ensemble_voting/accuracy.csv') # switch this to averaged results and k_means
-    # plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
+    plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
     # plot_val_acc(test_type = 'data_split', save_str = 'DataSplitValAcc')
     
     # plot_val_loss(test_type = 'DENSE_n_layers', save_str = 'DENSENLayersValLoss')
@@ -211,3 +221,4 @@ if __name__ == '__main__':
     # plot_val_acc(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValAcc')
     #plot_trainable_parameters_over_layers()
     #plot_nodes_per_layer()
+    
