@@ -1,7 +1,7 @@
 
 from matplotlib import pyplot as plt
 from sklearn.model_selection import StratifiedShuffleSplit
-from Preprocessing import prepare_data
+from Preprocessing import prepare_data, prepare_HA_data, prepare_covid_data, prepare_sepsis_data
 from sklearn import  svm
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.neighbors import KNeighborsClassifier
@@ -90,13 +90,16 @@ def k_fold_confusion_matrices(classifiers, X, y, n_splits = 5):
     axs[-1,-1].set_ylabel('True predictions (FP+TP)')
     sns.despine(ax=axs[-1,-1])
     plt.tight_layout()
-    plt.savefig('plots/ML/ConfusionMatrices.jpg', dpi=300)
+    plt.savefig('plots/covid/MLConfusionMatrices.jpg', dpi=300)
 
-def k_fold_roc(classifiers, X, y, n_splits=5):
+def k_fold_roc(classifiers, X, y, n_splits=5, plot_bar=True, dataset = "covid"):
     plt.clf()
     cv = StratifiedKFold(n_splits=n_splits)
-    colors = plt.cm.coolwarm(np.linspace(0,1,len(classifiers.keys())))
+    colors = plt.cm.coolwarm(np.linspace(0,1,len(classifiers.keys())+1))
     fig, ax = plt.subplots(figsize=(5,5))
+
+    mean_aucs = {}
+    std_aucs = {}
     for k, name in enumerate(classifiers.keys()):
         classifier = classifiers[name]
         tprs = []
@@ -117,6 +120,9 @@ def k_fold_roc(classifiers, X, y, n_splits=5):
         std_auc = np.std(aucs)
         
         plt.plot(mean_fpr,mean_tpr, label=f"{name}: {mean_auc :.2f} \u00B1 {std_auc : .2f}", alpha=1, color=colors[k])
+        mean_aucs[name] = mean_auc
+        std_aucs[name] = std_auc
+            
         std_tpr = np.std(tprs, axis=0)
         tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
         tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
@@ -125,67 +131,127 @@ def k_fold_roc(classifiers, X, y, n_splits=5):
             tprs_lower,
             tprs_upper,
             color=colors[k],
-            alpha=0.2,
+            alpha=0.1,
         )
-            
+    
+    # add BINN
+    k = k+1
+
+    tprs = pd.read_csv(f'plots/manuscript/roc/tprs_{dataset}.csv', index_col="Unnamed: 0").T
+    fprs = pd.read_csv(f'plots/manuscript/roc/fprs_{dataset}.csv', index_col="Unnamed: 0").T
+    aucs = pd.read_csv(f'plots/manuscript/roc/aucs_{dataset}.csv', index_col="Unnamed: 0").T
+    tprs = list(tprs.values)
+    mean_fpr = list(fprs.values)[0]
+    aucs = list(aucs.values)
+    mean_tpr = np.mean(tprs, axis=0)
+    mean_tpr[-1] = 1.0
+    std_tpr= np.std(tprs, axis=0)
+    mean_auc = metrics.auc(mean_fpr, mean_tpr)
+    std_auc= np.std(aucs, axis=0)[0]
+    tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
+    tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
+    label =f"BINN: {mean_auc : .2f} \u00B1 {std_auc : .2f}"
+    print(label)
+    plt.plot(mean_fpr, mean_tpr, label=label,  color=colors[k], alpha=0.8)
+    ax.fill_between(
+        mean_fpr,
+        tprs_lower,
+        tprs_upper,
+        color=colors[k],
+        alpha=0.1,
+    )
+    plt.plot(np.linspace(0,1,100), np.linspace(0,1,100), color='grey', dashes=[6,2], label='Random', alpha=0.5)
     plt.legend(title = "AUC",frameon=False)
     plt.ylabel('Sensitivity')
     plt.xlabel('1-specificity')
     plt.tight_layout()
     sns.despine()
-    plt.savefig('plots/ML/KFoldROC.jpg', dpi=300)
-        
-        
-def shap_summary_plot(classifiers, name, X, feature_names,):
+    plt.savefig(f'plots/manuscript/MLKFoldROC_{dataset}.jpg', dpi=300)
+    
+    
+def k_fold_pr(classifiers, X, y, n_splits=5,  dataset = "covid"):
     plt.clf()
-    classifier = classifiers[name]
-    if name == "Support Vector Machine": 
-        explainer = shap.LinearExplainer(classifier, X)
-    elif name == "K-Nearest Neighbour":
-        explainer = shap.KernelExplainer(classifier.predict_proba, X)
-    else:
-        explainer = shap.Explainer(classifier)
-    shap_values = explainer(X)
-    shap.summary_plot(shap_values, features=X, cmap=plt.cm.coolwarm, feature_names=  feature_names, max_display=8, plot_size=(5,3))
+    cv = StratifiedKFold(n_splits=n_splits)
+    colors = plt.cm.coolwarm(np.linspace(0,1,len(classifiers.keys())+1))
+    fig, ax = plt.subplots(figsize=(5,5))
+
+    mean_aucs = {}
+    std_aucs = {}
+    for k, name in enumerate(classifiers.keys()):
+        classifier = classifiers[name]
+        precisions = []
+        aucs = []
+        mean_recall = np.linspace(0, 1, 100)
+        for i, (train, test) in enumerate(cv.split(X, y)):
+            classifier.fit(X[train], y[train])
+            y_pred_proba =  classifiers[name].predict_proba(X[test])
+            p,r, _ = metrics.precision_recall_curve(y[test],  y_pred_proba[:,1])
+            a = metrics.roc_auc_score(y[test], y_pred_proba[:,1])
+            interp_precision = np.interp(mean_recall, p,r)
+            precisions.append(interp_precision)
+            aucs.append(a)
+        mean_precision = np.mean(precisions, axis=0)
+        mean_auc = metrics.auc(mean_recall, mean_precision)
+        std_auc = np.std(aucs)
+        
+        plt.plot(mean_recall,mean_precision, label=f"{name}: {mean_auc :.2f} \u00B1 {std_auc : .2f}", alpha=1, color=colors[k])
+        mean_aucs[name] = mean_auc
+        std_aucs[name] = std_auc
+            
+        std_precision = np.std(precisions, axis=0)
+        precisions_upper = np.minimum(mean_precision + std_precision, 1)
+        precisions_lower = np.maximum(mean_precision - std_precision, 0)
+        ax.fill_between(
+            mean_recall,
+            precisions_lower,
+            precisions_upper,
+            color=colors[k],
+            alpha=0.1,
+        )
+    
+    # add BINN
+    k = k+1
+
+    prs = pd.read_csv(f'plots/manuscript/precision_recall/prs_{dataset}.csv', index_col="Unnamed: 0").T
+    aucs = pd.read_csv(f'plots/manuscript/precision_recall/aucs_{dataset}.csv',index_col="Unnamed: 0").T
+    mean_precision = np.mean(prs, axis=0)
+    std_precision = np.std(prs,axis=0)
+    mean_recall = np.linspace(0,1,100)
+    mean_auc = metrics.auc(mean_recall, mean_precision)
+    std_auc = np.std(aucs)
+
+    prs_upper = np.minimum(mean_precision + std_precision, 1)
+    prs_lower = np.maximum(mean_precision - std_precision, 0)
+    label =f"BINN: {mean_auc: .2f} \u00B1 {std_auc[0] : .2f}"
+    plt.plot(mean_recall, mean_precision,  label=label, color=colors[k], alpha=0.8)
+    ax.fill_between(
+                mean_recall,
+                prs_lower,
+                prs_upper,
+                color=colors[k],
+                alpha=0.2,
+            )
+    plt.legend(title = "AUC",frameon=False)
+    plt.ylabel('Sensitivity')
+    plt.xlabel('1-specificity')
     plt.tight_layout()
-    plt.savefig(f'plots/ML/Shap{name}.jpg', dpi=300)
+    sns.despine()
+    plt.savefig(f'plots/manuscript/MLKFoldPrecisionRecall_{dataset}.jpg', dpi=300)
+
+
     
-    
-    
-    
-def vote_on_NaN(classifiers, X):
-    #TODO: This experiment
-    X_nan, y_nan, protein_labels = prepare_data(quantification_file = 'data/ms/NAN_inner.tsv', 
-                                                design_matrix = 'data/ms/NAN_inner_design_matrix.tsv', compare=False)
-    # need to align X_nan and X (use protein labels)
-    torch_X_nan = torch.Tensor(X_nan)
-    model_file_path = 'models/full_data_train.pth'
-    BINN = torch.load(model_file_path)
-    results = {'BINN' : [],  
-               'Support Vector Machine': [],
-                'K-Nearest Neighbour': [],
-                'Random Forest': [],
-                'LightGBM': [],
-                'XGBoost':[],
-            }
-    for classifier in classifiers.keys():
-        clf = classifiers[classifier]
-        clf.fit(X)
-        pred = clf.predict(X_nan)
-        results[classifier] = pred
-    pred = BINN(torch_X_nan)
-    y_hat = torch.argmax(y_hat, dim=1).numpy().tolist()
-    results['BINN'].append(y_hat)
-    print(results)
-    df = pd.DataFrame(results)
-    print(df)
+
 
 if __name__ == '__main__':
-    
-    cv = StratifiedShuffleSplit(n_splits=10, test_size=0.2)
-    X_train, y_train, protein_labels = prepare_data(scale=True, compare=True)
-    
-    
-    k_fold_confusion_matrices(classifiers, X_train, y_train)
+    #dataset = "sepsis"
+    #dataset = "covid"
+    dataset = "aaron"
+    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2)
+    if dataset == "covid" or dataset == "aaron":
+        X_train, y_train, protein_labels = prepare_covid_data(group_column = 'group')
+    elif dataset == "sepsis":
+        X_train, y_train, protein_labels = prepare_sepsis_data(group_column = 'Group')
+    #k_fold_confusion_matrices(classifiers, X_train, y_train)
     #shap_summary_plot(classifiers, name = 'XGBoost', X = X_train,feature_names = protein_labels)
-    k_fold_roc(classifiers, X_train, y_train)
+    k_fold_roc(classifiers, X_train, y_train, dataset=dataset)
+    k_fold_pr(classifiers, X_train, y_train, dataset=dataset)

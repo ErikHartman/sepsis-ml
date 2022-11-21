@@ -53,21 +53,46 @@ def get_shorter_names(long_names : list[str]):
     return names
 
 if __name__ == '__main__':
-    model_file_path = 'models/full_data_train.pth' # This should be the model that is fully trained (i.e, all data is training data)
+    
+    model_file_path = 'models/manuscript/NONA_sepsis_full_data_train_50_epochs.pth' # This should be the model that is fully trained (i.e, all data is training data)
     model = torch.load(model_file_path)
     model.report_layer_structure(verbose=True)
 
-
+    if "impute" in model_file_path:
+        impute = "impute_"
+        print("Impute == True")
+    else:
+        impute = ""
+    
+        
     feature_names = model.column_names[0]
 
     # load data
-    protein_matrix = pd.read_csv('data/ms/QuantMatrix.csv')
+    dataset = "sepsis"
+    #dataset = "aaron"
+    #dataset = "covid"
+    if dataset == "sepsis":
+        protein_matrix = 'data/ms/sepsis/QuantMatrixNoNA.csv'
+        design_matrix = 'data/ms/sepsis/inner_design_matrix.tsv'
+        sep  = ","
+    elif dataset == "aaron":
+        protein_matrix = 'data/ms/covid/AaronQM.tsv'
+        design_matrix = 'data/ms/covid/design_cropped.tsv'
+        sep = "\t"
+    elif dataset == "covid":
+        protein_matrix = 'data/ms/covid/QuantMatrix.tsv'
+        design_matrix = 'data/ms/covid/design_cropped.tsv'
+        sep = "\t"
+    
+    protein_matrix = pd.read_csv(protein_matrix, sep = sep )
     protein_matrix = fit_protein_matrix_to_network_input(protein_matrix, RN_proteins = model.RN.ms_proteins)
-    X,y = generate_data(protein_matrix, 'data/ms', scale = True)
-
+    #X,y = generate_data(protein_matrix, 'data/ms', scale = True)
+    X,y = generate_data(protein_matrix, design_matrix = design_matrix, scale = True, group_column = 'group'
+                                , sample_column = 'sample', group_one=1, group_two = 2)
     X_train, X_test, y_train, y_test = train_test_split(X,y,test_size = 0.3, stratify = y, random_state=42)
     print(len(y_test) + len(y_train))
-    print(sum(y_test)/len(y_test), sum(y_train)/len(y_train))
+    print("Classes: " , len(y_test==1), len(y_test==2))
+    
     X_test = torch.Tensor(X_test)
     y_test = torch.LongTensor(y_test)
     X_train = torch.Tensor(X_train)
@@ -75,15 +100,6 @@ if __name__ == '__main__':
 
     background = X_train
     test_data = X_test
-
-
-    def shap_test(model, background, test_data):
-        explainer = shap.DeepExplainer(model, background)
-        shap_values = explainer.shap_values(test_data)
-
-        shap.summary_plot(shap_values, test_data, feature_names = feature_names)
-        plt.savefig('plots/shap/SHAP_complete_model.jpg')
-        plt.clf()
 
     def shap_for_layers(model, background, test_data, plot=True):
         feature_index = 0
@@ -100,7 +116,7 @@ if __name__ == '__main__':
                 shap_dict['shap_values'].append(shap_values)
                 if plot:
                     shap.summary_plot(shap_values, intermediate_data, feature_names = feature_names, max_display=30, plot_size=[15,6])
-                    plt.savefig(f'plots/shap/SHAP_layer_{feature_index}.jpg', dpi=200)
+                    plt.savefig(f'plots/manuscript/SHAP/{impute}{dataset}_SHAP_layer_{feature_index}.jpg', dpi=200)
                 feature_index += 1
                 plt.clf()
                 intermediate_data = layer(intermediate_data)
@@ -110,7 +126,7 @@ if __name__ == '__main__':
                 
 
     def shap_sankey(model, background, test_data, show_top_n=10):
-        shap_dict = shap_for_layers(model, background, test_data, plot=False)
+        shap_dict = shap_for_layers(model, background, test_data, plot=True)
         feature_dict = {'source':[], 'target':[], 'value':[], 'type':[], 'source layer':[], 'target layer':[]}
         connectivity_matrices = model.get_connectivity_matrices()
         curr_layer = 0
@@ -190,7 +206,7 @@ if __name__ == '__main__':
             df_csv['source'] = get_proteins_triv_name(df_csv['source'].values)
             df_csv['source'] = get_pathway_name(df_csv['source'].values)
             df_csv['target'] = get_pathway_name(df_csv['target'].values)
-            df_csv.to_csv('ShapConnections.csv')
+            df_csv.to_csv('CPCScore_ShapConnections.csv')
             
         #save_as_csv(df)
         def normalize_layer_values(df):
@@ -313,15 +329,14 @@ if __name__ == '__main__':
             final_df = pd.DataFrame()
             for layer in layers:
                 other_df = grouped_df.loc[grouped_df['source_w_other'].str.startswith('Other')]
-                other_value = other_df.groupby('source_w_other').mean().value[0]
-                
-                layer_df = grouped_df[grouped_df['source layer']==layer].sort_values(['value'], ascending=False)
+                other_value = other_df.groupby('source_w_other').mean().value[0]           
+                layer_df = grouped_df[grouped_df['source layer']==layer].sort_values(['value'], ascending=True)
                 layer_df = layer_df.loc[~layer_df['source_w_other'].str.startswith('Other')]
                 layer_df['rank'] = range(len(layer_df.index))
                 layer_df['value'] = layer_df['value'] / layer_df['value'].sum()
-                layer_df['y'] = (1-layer_df['value']) / (max(layer_df['rank']))
+                layer_df['y'] = 0.5*(0.01+max(layer_df['rank'])-layer_df['rank']) / (max(layer_df['rank']))-0.05
                 layer_df['x'] = (0.01+layer)/(len(layers)+1)
-                other_df = pd.DataFrame([[f"Other connections {layer}", layer, other_value, 10, 0.7, (0.01+layer)/(len(layers)+1)]]
+                other_df = pd.DataFrame([[f"Other connections {layer}", layer, other_value, 10, 0.8, (0.01+layer)/(len(layers)+1)]]
                                         ,columns = ['source_w_other','source layer', 'value', 'rank','y','x'])
                 final_df = pd.concat([final_df, layer_df, other_df])
             print(final_df)
@@ -358,7 +373,7 @@ if __name__ == '__main__':
                 y=y
                 )
         links = dict(
-                source =encoded_source,
+                source = encoded_source,
                 target = encoded_target,
                 value = value,
                 color = link_colors
@@ -367,15 +382,16 @@ if __name__ == '__main__':
         fig = go.Figure(
             data=[
                 go.Sankey(
-                    
                     textfont = dict(size=15,family='Arial'),
                     orientation="h",
                     arrangement = "snap",
                     node = nodes,
                     link = links)
-                  ]
+                  ],
+                    layout = go.Layout(
+                )
             )
-        fig.write_image('plots/BINN/ShapSankey.png', width=1750, scale=3, height=1000)
+        fig.write_image(f'plots/manuscript/SHAP/{dataset}_{impute}SHAPSANKEY.png', width=1920, scale=3, height=1000)
         
   
     #shap_for_layers(model, background, test_data)

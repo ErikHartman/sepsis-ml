@@ -84,10 +84,11 @@ class Reactome():
 
 class ReactomeNetwork():
 
-    def __init__(self,  filter = True, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome_All_Levels.txt"):
+    def __init__(self,  filter = True, ms_proteins = [], all_paths_file = "data/reactome/ReactomePathwaysRelation.txt", protein_file = "data/reactome/UniProt2Reactome_All_Levels.txt"
+                 , ms_hierarchy = 'data/reactome/sepsis_HSA_All_ms_path.csv'):
         self.reactome = Reactome(all_paths_file, protein_file) 
         self.filter = filter # If filter is true, the network will be created with only proteins in ms_proteins
-        self.ms_hierarchy = pd.read_csv('data/reactome/HSA_All_ms_path.csv')
+        self.ms_hierarchy = pd.read_csv(ms_hierarchy)
         self.ms_proteins = ms_proteins
         self.netx = self.get_reactome_networkx()
         
@@ -179,14 +180,10 @@ class ReactomeNetwork():
 
 
 if __name__ == '__main__':
-    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
-    RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
-    RN2 = ReactomeNetwork()
-    print('MS')
-    for matrix in RN.get_connectivity_matrices(n_levels=4):
-        print(matrix.shape)
-    print('All')
-    for matrix in RN2.get_connectivity_matrices(n_levels=4):
-        print(matrix.shape)
+    ms_proteins = pd.read_csv('data/ms/sepsis/inner.tsv', sep = "\t")['Protein']
 
+    RN = ReactomeNetwork(filter=True, ms_proteins=ms_proteins)
+    layers = RN.get_layers(n_levels=4)
+    print("Number of layers: " , len(layers))
+    print(layers[1][["R-HSA-1430728"]])
     

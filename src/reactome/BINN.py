@@ -25,8 +25,6 @@ def generate_sequential(layer_sizes,
     layers = []
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=bias)
-        print(torch.numel(linear_layer.bias))
-        print(torch.numel(linear_layer.weight))
         layers.append((f"Layer_{n}", linear_layer)) # linear layer 
         layers.append((f"BatchNorm_{n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
         if connectivity_matrices is not None:
@@ -34,7 +32,6 @@ def generate_sequential(layer_sizes,
             prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
             layers.append((f"Dropout_{n}", nn.Dropout(0.2)))
         else:
-            # If not pruning do dropout instead.
             layers.append((f"Dropout_{n}", nn.Dropout(0.5)))
         append_activation(layers, activation)
     layers.append(("Output layer", nn.Linear(layer_sizes[-1],2, bias=bias))) # Output layer
@@ -51,12 +48,13 @@ class BINN(LightningModule):
                  sparse : bool = False, 
                  n_layers : int = 4, 
                  scheduler : str = 'plateau',
-                 validate=True):
+                 validate=True,
+                 ms_hierarchy: str = 'data/reactome/sepsis_HSA_all_ms_path.csv'):
         super().__init__()
         if sparse:
-            self.RN = ReactomeNetwork(ms_proteins = ms_proteins, filter=True)
+            self.RN = ReactomeNetwork(ms_proteins = ms_proteins, ms_hierarchy = ms_hierarchy, filter=True)
         else:
-            self.RN = ReactomeNetwork(ms_proteins = ms_proteins)
+            self.RN = ReactomeNetwork(ms_proteins = ms_proteins, ms_hierarchy = ms_hierarchy)
         print(self.RN.info())
         self.n_layers = n_layers
         connectivity_matrices = self.RN.get_connectivity_matrices(n_layers)

@@ -9,7 +9,6 @@ import numpy as np
 from sklearn.metrics import auc
 
 
-
 def get_metrics_for_dir(d):
     tot_df = pd.DataFrame()
     d = f'logs/{d}/lightning_logs/'
@@ -51,13 +50,14 @@ def plot_roc_curve(fprs, tprs, aucs, save_str):
     mean_fpr = list(fprs.values())[0]
     aucs = list(aucs.values())
     mean_tpr = np.mean(tprs, axis=0)
+    print(tprs)
     mean_tpr[-1] = 1.0
     std_tpr= np.std(tprs, axis=0)
     mean_auc = auc(mean_fpr, mean_tpr)
     std_auc= np.std(aucs, axis=0)
     tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
     tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-    fig, ax = plt.subplots(figsize=(3,3))
+    fig, ax = plt.subplots(figsize=(5,5))
     plt.plot(mean_fpr, mean_tpr, label=f"BINN: {mean_auc : .2f} \u00B1 {std_auc : .2f}")
     ax.fill_between(
         mean_fpr,
@@ -127,7 +127,7 @@ def plot_val_acc(test_type = 'n_layers', save_str = 'NLayersValLoss'):
 
 def plot_trainable_parameters_over_layers():
     plt.clf()
-    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    ms_proteins = pd.read_csv('data/ms/covid/QuantMatrix.tsv', sep="\t")['Protein']
     trainable_params = {'n':[], 'sparse_params':[], 'dense_params':[]}
     for n_layers in range(3,7):
         model = BINN(sparse=True,
@@ -166,11 +166,11 @@ def plot_trainable_parameters_over_layers():
     plt.legend(frameon=False)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/BINN/TrainableParameters.jpg', dpi=400)
+    plt.savefig('plots/covid/TrainableParameters.jpg', dpi=400)
     
 def plot_nodes_per_layer():
     plt.clf()
-    ms_proteins = pd.read_csv('data/ms/QuantMatrix.csv')['Protein']
+    ms_proteins = pd.read_csv('data/ms/covid/QuantMatrix.tsv', sep="\t")['Protein']
     nodes = {'n_layers':[], 'number_of_nodes':[], 'layer':[]}
     for n_layers in range(3,7):
         model = BINN(sparse=True,
@@ -193,7 +193,7 @@ def plot_nodes_per_layer():
     plt.legend(title='# hidden layers', frameon=False)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/BINN/NodesPerLayer.jpg', dpi=400)
+    plt.savefig('plots/covid/NodesPerLayer.jpg', dpi=400)
     
 def plot_copies():
     copies = [0, 0, 72, 367, 1189, 2452] #hardcoded for ease
@@ -212,13 +212,13 @@ if __name__ == '__main__':
     # plot_val_loss(test_type = 'data_split', save_str = 'DataSplitValLoss')
     #plot_trainable_parameters_over_layers()    
     #plot_performance_of_ensemble('ensemble_voting', 'logs/ensemble_voting/accuracy.csv') # switch this to averaged results and k_means
-    plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
+    #plot_val_acc(test_type = 'n_layers', save_str='NLayersValAcc')
     # plot_val_acc(test_type = 'data_split', save_str = 'DataSplitValAcc')
     
     # plot_val_loss(test_type = 'DENSE_n_layers', save_str = 'DENSENLayersValLoss')
     # plot_val_loss(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValLoss')
     # plot_val_acc(test_type = 'DENSE_n_layers', save_str='DENSENLayersValAcc')
     # plot_val_acc(test_type = 'DENSE_data_split', save_str = 'DENSEDataSplitValAcc')
-    #plot_trainable_parameters_over_layers()
-    #plot_nodes_per_layer()
+    plot_trainable_parameters_over_layers()
+    plot_nodes_per_layer()
     

@@ -8,17 +8,28 @@ import numpy as np
 from sklearn.model_selection import StratifiedKFold
 from dpks.quant_matrix import QuantMatrix
 import torch
+    
+    
+def impute_uni(X):
+    X = np.nan_to_num(X)
+    no_zero = X[X != 0]
+    minvalue = no_zero.min()
+    maxvalue = no_zero.max()*0.1+minvalue
+    print(minvalue, maxvalue)
+    mask = X == 0
+    c = np.count_nonzero(mask)
+    nums = np.random.uniform(minvalue, maxvalue, c)
+    X[mask] = nums
+    return X
 
-
-def generate_protein_matrix(MS_DATA_PATH = "data/ms", save=False):
+def generate_protein_matrix(MS_DATA_PATH = "data/ms/sepsis", save=False):
     print("Generating protein matrix...")
     quant_matrix = QuantMatrix(
         quantification_file=f"{MS_DATA_PATH}/inner.tsv",
         design_matrix_file=f"{MS_DATA_PATH}/inner_design_matrix.tsv"
     )
     df = (
-        quant_matrix
-        .filter() # filter for q-values (removes rows with low q value (peptides), Q = 0.01) and removes decoys
+        quant_matrix # filter for q-values (removes rows with low q value (peptides), Q = 0.01) and removes decoys
         .normalize(method="mean", use_rt_sliding_window_filter = True) # best type of normalization is RT-sliding window
         .quantify(method="maxlfq") # play around with minimum_subgroups (default is set 1)
     ).compare_groups(
@@ -27,9 +38,9 @@ def generate_protein_matrix(MS_DATA_PATH = "data/ms", save=False):
         group_b=2,
         min_samples_per_group = 2, 
         level='protein',
-    ).to_df()
+    ).to_df().dropna(subset=['CorrectedPValue'])
     if save:
-        df.to_csv('data/ms/QuantMatrix.csv')
+        df.to_csv('data/ms/QuantMatrixNoNA.csv')
     return df
 
 def fit_protein_matrix_to_network_input(protein_matrix, RN_proteins):
@@ -47,14 +58,23 @@ def fit_protein_matrix_to_network_input(protein_matrix, RN_proteins):
         protein_matrix = protein_matrix.loc[RN_proteins]
     return protein_matrix
 
-def generate_data(protein_matrix, MS_DATA_PATH, design_matrix="data/ms/inner_design_matrix.tsv", scale=False):
-    design_matrix = pd.read_csv(design_matrix, sep='\t')
-    GroupOneCols = design_matrix[design_matrix['Group'] == 1]['Sample'].values
-    GroupTwoCols = design_matrix[design_matrix['Group'] == 2]['Sample'].values
+def generate_data(protein_matrix, design_matrix, scale=False, group_column = "Group", sample_column = "Samples"
+                  ,group_one = 1, group_two = 2, impute=False):
+    if design_matrix.endswith('tsv'):
+        sep = "\t"
+    else:
+        sep = ","
+    design_matrix = pd.read_csv(design_matrix, sep=sep)
+    GroupOneCols = design_matrix[design_matrix[group_column] == group_one][sample_column].values
+    GroupTwoCols = design_matrix[design_matrix[group_column] == group_two][sample_column].values
     df1 = protein_matrix[GroupOneCols].T
     df2 = protein_matrix[GroupTwoCols].T
-    y = np.array([1 for x in GroupOneCols] + [2 for x in GroupTwoCols])-1
-    X = pd.concat([df1,df2]).fillna(0).to_numpy()
+    y = np.array([0 for x in GroupOneCols] + [1 for x in GroupTwoCols])
+    if impute:
+        X = pd.concat([df1,df2]).fillna(0).to_numpy()
+        X = impute_uni(X)
+    else:   
+        X = pd.concat([df1,df2]).fillna(0).to_numpy()
     if scale:
         scaler = preprocessing.StandardScaler().fit(X)
         X = scaler.transform(X)
