@@ -34,29 +34,28 @@ def plot_parameters():
         trainable_params['n'].append(n_layers)
         trainable_params['covid_params'].append(c_sparse_parameters)
         trainable_params['sepsis_params'].append(s_sparse_parameters)
-    fig, ax = plt.subplots(figsize=(4,3))
+    fig, ax = plt.subplots(figsize=(3,3))
     width = 0.5
     x = np.arange(len(trainable_params['n']))
-    ax.bar(x=x + width/2, height=trainable_params['covid_params'], width=width, label='COVID BINN', color='blue', alpha=0.5)
-    ax.bar(x=x - width/2, height=trainable_params['sepsis_params'], width=width, label='Sepsis BINN', color='red', alpha=0.5)
+    ax.bar(x=x + width/2, height=trainable_params['covid_params'], width=width, label='COVID', color='blue', alpha=0.5)
+    ax.bar(x=x - width/2, height=trainable_params['sepsis_params'], width=width, label='Sepsis', color='red', alpha=0.5)
     for bar in ax.patches:
         if bar.get_height() > 10**6:
-            format_string = f"{format(bar.get_height()/10**6, '.0f')}M"
+            format_string = f"{format(bar.get_height()/10**6, '.1f')}M"
         else:
-            format_string = f"{format(bar.get_height()/10**3, '.0f')}k"
+            format_string = f"{format(bar.get_height()/10**3, '.1f')}k"
         ax.annotate(format_string,
                     (bar.get_x() + bar.get_width() / 2,
                         bar.get_height()), ha='center', va='center',
-                    size=10, xytext=(0, 6),
+                    size=7, xytext=(0, 6),
                     textcoords='offset points')
-    plt.yscale('log')
     ax.set_xticks(x, trainable_params['n'])
     plt.xlabel('# layers')
     plt.ylabel('# trainable parameters')
     plt.legend(frameon=False)
     sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/manuscript/TrainableParameters.jpg', dpi=400)
+    plt.savefig('plots/manuscript/TrainableParameters.svg', dpi=400)
     
     
     
@@ -102,17 +101,17 @@ def plot_nodes_per_layer():
         a.set_ylabel('# nodes')
         a.set_xlabel('Hidden layer')
         a.legend(title='# hidden layers', frameon=False)
-        a.set_ylim([0,1400])
+        a.set_ylim([0,700])
         sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/manuscript/NodesPerLayer.jpg', dpi=400)
+    plt.savefig('plots/manuscript/NodesPerLayer.svg', dpi=400)
     
     
 def plot_copies():
     #harcoded for ease
     
-    covid = [0, 75, 331, 825]
-    sepsis = [0, 72, 367, 1189]
+    covid = [0, 15, 65, 172]
+    sepsis = [0, 26, 163, 495]
     fig, ax = plt.subplots(figsize=(3,3))
     sns.lineplot(x = [3,4,5,6], y = covid, marker  = 'o', label='COVID', color='blue')
     sns.lineplot(x = [3,4,5,6], y = sepsis, marker  = 'o', label="Sepsis", color='red')
@@ -121,7 +120,7 @@ def plot_copies():
     plt.legend()
     sns.despine()
     plt.tight_layout()
-    plt.savefig('plots/manuscript/Copies.jpg', dpi=300)
+    plt.savefig('plots/manuscript/Copies.svg', dpi=300)
     
     
 def plot_auc():
@@ -162,92 +161,11 @@ def plot_auc():
     return None
 
 
-def plot_roc_curve(save_str):
-    plt.clf()
-    datasets = ['sepsis', 'covid']
-    fig, ax = plt.subplots(figsize=(4,4))
-    for dataset in datasets:
-        tprs = pd.read_csv(f'plots/manuscript/roc/tprs_{dataset}.csv', index_col="Unnamed: 0").T
-        fprs = pd.read_csv(f'plots/manuscript/roc/fprs_{dataset}.csv', index_col="Unnamed: 0").T
-        aucs = pd.read_csv(f'plots/manuscript/roc/aucs_{dataset}.csv', index_col="Unnamed: 0").T
-        tprs = list(tprs.values)
-        mean_fpr = list(fprs.values)[0]
-        aucs = list(aucs.values)
-        mean_tpr = np.mean(tprs, axis=0)
-        mean_tpr[-1] = 1.0
-        std_tpr= np.std(tprs, axis=0)
-        mean_auc = auc(mean_fpr, mean_tpr)
-        std_auc= np.std(aucs, axis=0)[0]
-        tprs_upper = np.minimum(mean_tpr + std_tpr, 1)
-        tprs_lower = np.maximum(mean_tpr - std_tpr, 0)
-        if dataset == "sepsis":
-            color = 'red'
-            label = 'Sepsis'
-        else:
-            color = 'blue'
-            label = "COVID"
-        label =f"{label}: {mean_auc : .2f} \u00B1 {std_auc : .2f}"
-        print(label)
-        plt.plot(mean_fpr, mean_tpr, label=label,  color=color, alpha=0.8)
-        ax.fill_between(
-            mean_fpr,
-            tprs_lower,
-            tprs_upper,
-            color=color,
-            alpha=0.2,
-        )
-    plt.plot(np.linspace(0,1,100), np.linspace(0,1,100), color='grey', dashes=[6,2], label='Random', alpha=0.5)
-    plt.ylabel('Sensitivity')
-    plt.xlabel('1-specificity')
-    plt.legend(title = "AUC",frameon=False)
-    plt.tight_layout()
-    sns.despine()
-    plt.savefig(save_str, dpi=300)
-    
-def plot_pr_curve(save_str):
-    plt.clf()
-    datasets = ['sepsis', 'covid']
-    fig, ax = plt.subplots(figsize=(4,4))
-    for dataset in datasets:
-        prs = pd.read_csv(f'plots/manuscript/precision_recall/prs_{dataset}.csv', index_col="Unnamed: 0").T
-        aucs = pd.read_csv(f'plots/manuscript/precision_recall/aucs_{dataset}.csv',index_col="Unnamed: 0").T
-        mean_precision = np.mean(prs, axis=0)
-        std_precision = np.std(prs,axis=0)
-        mean_recall = np.linspace(0,1,100)
-        mean_auc = auc(mean_recall, mean_precision)
-        std_auc = np.std(aucs)
-
-        prs_upper = np.minimum(mean_precision + std_precision, 1)
-        prs_lower = np.maximum(mean_precision - std_precision, 0)
-        
-        if dataset == "sepsis":
-            color = 'red'
-            label = 'Sepsis'
-        else:
-            color = 'blue'
-            label = "COVID"
-            
-        label =f"{label}: {mean_auc: .2f} \u00B1 {std_auc[0] : .2f}"
-        plt.plot(mean_recall, mean_precision,  label=label, color=color, alpha=0.8)
-        ax.fill_between(
-                    mean_recall,
-                    prs_lower,
-                    prs_upper,
-                    color=color,
-                    alpha=0.2,
-                )
-    plt.ylabel('Precision')
-    plt.xlabel('Recall')
-    plt.tight_layout()
-    plt.legend(title = "AUC",frameon=False)
-    sns.despine()
-    plt.savefig(save_str, dpi=300)
-
     
 if __name__ == '__main__':
-    # plot_parameters()
-    # plot_nodes_per_layer()
-    plot_copies()
+    #plot_parameters()
+    plot_nodes_per_layer()
+    #plot_copies()
     #plot_roc_curve("plots/manuscript/ROCS.jpg")
     #plot_auc()
-   # plot_pr_curve("plots/manuscript/PR.jpg")
+    #plot_pr_curve("plots/manuscript/PR.jpg")

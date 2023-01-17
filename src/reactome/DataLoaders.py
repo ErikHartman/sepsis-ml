@@ -70,11 +70,9 @@ def generate_data(protein_matrix, design_matrix, scale=False, group_column = "Gr
     df1 = protein_matrix[GroupOneCols].T
     df2 = protein_matrix[GroupTwoCols].T
     y = np.array([0 for x in GroupOneCols] + [1 for x in GroupTwoCols])
+    X = pd.concat([df1,df2]).fillna(0).to_numpy()
     if impute:
-        X = pd.concat([df1,df2]).fillna(0).to_numpy()
         X = impute_uni(X)
-    else:   
-        X = pd.concat([df1,df2]).fillna(0).to_numpy()
     if scale:
         scaler = preprocessing.StandardScaler().fit(X)
         X = scaler.transform(X)

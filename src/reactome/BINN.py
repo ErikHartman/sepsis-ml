@@ -6,6 +6,14 @@ import torch.nn.utils.prune as prune
 from pytorch_lightning import LightningModule
 import torch
 
+def append_activation(layers, activation, n):
+    if activation == 'tanh':
+        layers.append((f'Tanh {n}', nn.Tanh()))
+    elif activation == 'relu':
+        layers.append((f'ReLU {n}', nn.ReLU()))
+    elif activation == "leaky relu":
+        layers.append((f'LeakyReLU {n}', nn.LeakyReLU()))
+    return layers
 
 def generate_sequential(layer_sizes, 
                         connectivity_matrices = None, 
@@ -13,15 +21,6 @@ def generate_sequential(layer_sizes,
     """
     Generates a sequential model from layer sizes.
     """
-    def append_activation(layers, activation):
-        if activation == 'tanh':
-            layers.append((f'Tanh {n}', nn.Tanh()))
-        elif activation == 'relu':
-            layers.append((f'ReLU {n}', nn.ReLU()))
-        elif activation == "leaky relu":
-            layers.append((f'LeakyReLU {n}', nn.LeakyReLU()))
-        return layers
-        
     layers = []
     for n in range(len(layer_sizes)-1):
         linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=bias)
@@ -33,11 +32,71 @@ def generate_sequential(layer_sizes,
             layers.append((f"Dropout_{n}", nn.Dropout(0.2)))
         else:
             layers.append((f"Dropout_{n}", nn.Dropout(0.5)))
-        append_activation(layers, activation)
+        append_activation(layers, activation, n)
     layers.append(("Output layer", nn.Linear(layer_sizes[-1],2, bias=bias))) # Output layer
     model = nn.Sequential(collections.OrderedDict(layers))
     return model
 
+def generate_residual(layer_sizes, 
+                        connectivity_matrices = None, 
+                        activation='tanh', bias=False):
+    
+    layers = []
+
+    def generate_block(n, layers):
+        linear_layer = nn.Linear(layer_sizes[n], layer_sizes[n+1], bias=bias)
+        layers.append((f"Layer_{n}", linear_layer)) # linear layer 
+        layers.append((f"BatchNorm_{n}", nn.BatchNorm1d(layer_sizes[n+1]))) # batch normalization
+        if connectivity_matrices is not None:
+            prune.custom_from_mask(linear_layer, name='weight', mask=torch.tensor(connectivity_matrices[n].T.values))
+        layers.append((f"Dropout_{n}", nn.Dropout(0.2)))
+        layers.append((f'Residual_out_{n}', nn.Linear(layer_sizes[n+1],2, bias=bias)))
+        layers.append((f"Residual_sigmoid_{n}", nn.Sigmoid()))
+        return layers
+            
+    for res_index in range(len(layer_sizes)):
+        if res_index == len(layer_sizes)-1:
+            layers.append((f"BatchNorm_final", nn.BatchNorm1d(layer_sizes[-1]))) # batch normalization
+            layers.append((f"Dropout_final", nn.Dropout(0.2)))
+            layers.append((f'Residual_out_final', nn.Linear(layer_sizes[-1],2, bias=bias)))
+            layers.append((f"Residual_sigmoid_final", nn.Sigmoid()))
+        else:
+            layers = generate_block(res_index, layers)
+            append_activation(layers, activation, res_index)
+
+           
+    model = nn.Sequential(collections.OrderedDict(layers))
+    return model
+
+
+
+def is_activation(layer):
+    if isinstance(layer, nn.Tanh):
+        return True
+    elif isinstance(layer, nn.ReLU):
+        return True
+    elif isinstance(layer, nn.LeakyReLU):
+        return True
+    return False
+
+def forward_residual(model : nn.Sequential, x):
+    x_final = torch.Tensor([0,0])
+    residual_counter = 0
+    for name, layer in model.named_children():
+        if name.startswith("Residual"):
+            if "out" in name: # we've reached res output
+                x_temp = layer(x)
+            if "sigmoid" in name: # weve reached output sigmoid. Time to add to x_final
+                x_temp = layer(x_temp)
+                x_final = x_final + x_temp
+                residual_counter = residual_counter + 1
+        else:
+            x = layer(x)
+    x_final = x_final / (residual_counter) # average
+
+    return x_final
+        
+    
 
 class BINN(LightningModule):
     def __init__(self, 
@@ -49,7 +108,8 @@ class BINN(LightningModule):
                  n_layers : int = 4, 
                  scheduler : str = 'plateau',
                  validate=True,
-                 ms_hierarchy: str = 'data/reactome/sepsis_HSA_all_ms_path.csv'):
+                 ms_hierarchy: str = 'data/reactome/sepsis_HSA_all_ms_path.csv',
+                 residual: bool = False):
         super().__init__()
         if sparse:
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, ms_hierarchy = ms_hierarchy, filter=True)
@@ -57,6 +117,7 @@ class BINN(LightningModule):
             self.RN = ReactomeNetwork(ms_proteins = ms_proteins, ms_hierarchy = ms_hierarchy)
         print(self.RN.info())
         self.n_layers = n_layers
+        self.residual = residual
         connectivity_matrices = self.RN.get_connectivity_matrices(n_layers)
         layer_sizes = []
         self.column_names = []
@@ -65,7 +126,10 @@ class BINN(LightningModule):
             layer_sizes.append(i)
             self.column_names.append(matrix.index)
         if sparse:
-            self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation, bias=True)
+            if self.residual:
+                self.layers = generate_residual(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation, bias=True)
+            else:
+                self.layers = generate_sequential(layer_sizes, connectivity_matrices = connectivity_matrices, activation=activation, bias=True)
         else:
             self.layers = generate_sequential(layer_sizes, activation=activation, bias=True)    
         init_weights(self.layers)   
@@ -76,7 +140,10 @@ class BINN(LightningModule):
         self.save_hyperparameters()
     
     def forward(self, x):
-        return self.layers(x) 
+        if self.residual:
+            return forward_residual(self.layers, x)
+        else:
+            return self.layers(x)
         
         
     def training_step(self, batch, batch_nb):
@@ -157,3 +224,6 @@ def init_weights(m):
 def reset_params(m):
     if isinstance(m, nn.BatchNorm1d) or isinstance(m, nn.Linear):
         m.reset_parameters()
+        
+
+    

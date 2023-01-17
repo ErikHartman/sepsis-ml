@@ -90,7 +90,7 @@ def k_fold_confusion_matrices(classifiers, X, y, n_splits = 5):
     axs[-1,-1].set_ylabel('True predictions (FP+TP)')
     sns.despine(ax=axs[-1,-1])
     plt.tight_layout()
-    plt.savefig('plots/covid/MLConfusionMatrices.jpg', dpi=300)
+    plt.savefig('plots/covid/MLConfusionMatrices.svg', dpi=300)
 
 def k_fold_roc(classifiers, X, y, n_splits=5, plot_bar=True, dataset = "covid"):
     plt.clf()
@@ -166,7 +166,7 @@ def k_fold_roc(classifiers, X, y, n_splits=5, plot_bar=True, dataset = "covid"):
     plt.xlabel('1-specificity')
     plt.tight_layout()
     sns.despine()
-    plt.savefig(f'plots/manuscript/MLKFoldROC_{dataset}.jpg', dpi=300)
+    plt.savefig(f'plots/manuscript/MLKFoldROC_{dataset}_ReactomeProteins.svg', dpi=300)
     
     
 def k_fold_pr(classifiers, X, y, n_splits=5,  dataset = "covid"):
@@ -232,11 +232,11 @@ def k_fold_pr(classifiers, X, y, n_splits=5,  dataset = "covid"):
                 alpha=0.2,
             )
     plt.legend(title = "AUC",frameon=False)
-    plt.ylabel('Sensitivity')
-    plt.xlabel('1-specificity')
+    plt.ylabel('Precision')
+    plt.xlabel('Recall')
     plt.tight_layout()
     sns.despine()
-    plt.savefig(f'plots/manuscript/MLKFoldPrecisionRecall_{dataset}.jpg', dpi=300)
+    plt.savefig(f'plots/manuscript/MLKFoldPrecisionRecall_{dataset}_ReactomeProteins.svg', dpi=300)
 
 
     
@@ -246,11 +246,11 @@ if __name__ == '__main__':
     #dataset = "sepsis"
     #dataset = "covid"
     dataset = "aaron"
-    cv = StratifiedShuffleSplit(n_splits=5, test_size=0.2)
+    cv = StratifiedShuffleSplit(n_splits=3, test_size=0.2)
     if dataset == "covid" or dataset == "aaron":
         X_train, y_train, protein_labels = prepare_covid_data(group_column = 'group')
     elif dataset == "sepsis":
-        X_train, y_train, protein_labels = prepare_sepsis_data(group_column = 'Group')
+        X_train, y_train, protein_labels = prepare_sepsis_data(group_column = 'group')
     #k_fold_confusion_matrices(classifiers, X_train, y_train)
     #shap_summary_plot(classifiers, name = 'XGBoost', X = X_train,feature_names = protein_labels)
     k_fold_roc(classifiers, X_train, y_train, dataset=dataset)

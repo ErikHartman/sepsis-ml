@@ -5,8 +5,12 @@ my-venv
 lightning_logs
 data/reactome/
 models
-logs
+logs_*
+/logs
 data/human_proteome.gz
 ShapConnections.csv
 *pptx
 ShapShort.csv
+.vscode
+/data
+ src/reactome/__pycache__/

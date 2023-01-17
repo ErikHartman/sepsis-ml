@@ -128,7 +128,7 @@ class ReactomeNetwork():
 
     def get_tree(self):
         # convert to tree
-        return nx.bfs_tree(self.netx, 'root') #breadth first to remove weird connections
+        return nx.bfs_tree(self.netx, 'root') 
 
     def get_completed_network(self, n_levels):
         return complete_network(self.netx, n_levels = n_levels)

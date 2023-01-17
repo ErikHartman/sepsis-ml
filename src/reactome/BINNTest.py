@@ -20,25 +20,6 @@ import copy
 import numpy as np
 
 
-def weight_heatmap(layers, file_name, column_names=None, k = 0, only_last = False):
-    layer_weights = []
-    for l in layers:
-        if isinstance(l, nn.Linear):
-            df = pd.DataFrame(l.weight.detach().numpy())
-            layer_weights.append(df)
-  
-    for i, layer in enumerate(layer_weights):
-        if only_last and i < len(layer_weights)-1: continue
-        if column_names:
-            layer.columns = column_names[i] 
-            if i < len(layer_weights)-1:
-                layer.index = column_names[i+1]
-        plt.figure(figsize=(20,20))
-        sns.heatmap(layer.T, center=0.00, cmap='vlag')
-        plt.gca().set_aspect('equal')
-        print("Creating weight-heatmap...")
-        plt.savefig(f'plots/weight_maps/{file_name}_layer={i}_k={k}.jpg', dpi=200)
-        plt.clf()
 
     
 def k_fold(model :  BINN,  k_folds = 5, scale=True, epochs=100, log_name = 'k_fold', save=False, save_prefix='', data_split=1.0, X=None, y=None, plot=False,
@@ -110,8 +91,8 @@ def k_fold(model :  BINN,  k_folds = 5, scale=True, epochs=100, log_name = 'k_fo
         pd.DataFrame(aucs, index=[0]).to_csv(f'plots/manuscript/roc/aucs_{dataset}.csv')
         pd.DataFrame(prs, index=range(len(prs[0]))).to_csv(f'plots/manuscript/precision_recall/prs_{dataset}.csv')
         pd.DataFrame(pr_auc, index=[0]).to_csv(f'plots/manuscript/precision_recall/aucs_{dataset}.csv')
-        plot_roc_curve(fprs, tprs, aucs, f'plots/manuscript/{dataset}_ROC{save_prefix}.jpg')
-        plot_confusion_matrix(confusion_matrices,  f'plots/manuscript/{dataset}_ConfusionMatrix{save_prefix}.jpg')
+        plot_roc_curve(fprs, tprs, aucs, f'plots/manuscript/{dataset}_ROC{save_prefix}.svg')
+        plot_confusion_matrix(confusion_matrices,  f'plots/manuscript/{dataset}_ConfusionMatrix{save_prefix}.svg')
     return trained_models
         
 def simple_run(model : BINN, val_size = 0.3, scale=True, epochs=100, log_name = '', callbacks = [], fit=True, validate=True, dataloader=None):
@@ -183,40 +164,32 @@ def train_on_full_data(model : BINN, protein_matrix, design_matrix, save_prefix=
     
 if __name__ == '__main__':
     impute = False
+    torch.manual_seed(seed=42)
     #dataset = "sepsis"
-    #dataset = "covid" 
-    dataset = "aaron"
+    dataset = "sepsis"
+    
     covid_ms_hierarchy = "data/reactome/covid_HSA_All_ms_path.csv"
     sepsis_ms_hierarchy = "data/reactome/sepsis_HSA_All_ms_path.csv"
     aaron_covid_ms_hierarchy = "data/reactome/Aaron_covid_HSA_All_ms_path.csv"
-    if dataset == "covid":
-        ms_hierarchy = covid_ms_hierarchy
-        weight = 100 / torch.Tensor([281,406]) # class weights
-        ms_proteins = pd.read_csv('data/ms/covid/QuantMatrix.tsv', sep="\t")['Protein']
-        protein_matrix = 'data/ms/covid/QuantMatrix.tsv'
-        design_matrix = 'data/ms/covid/design_cropped.tsv'
-        k_folds = 6
-        n_layers = 5
-        epochs = 50
-    elif dataset == 'aaron':
+    if dataset == 'aaron':
         ms_hierarchy = aaron_covid_ms_hierarchy
         weight = 100 / torch.Tensor([281,406]) # class weights
         ms_proteins = pd.read_csv('data/ms/covid/AaronQM.tsv', sep="\t")['Protein']
         protein_matrix = 'data/ms/covid/AaronQM.tsv'
         design_matrix = 'data/ms/covid/design_cropped.tsv'
-        k_folds = 6
+        k_folds = 3
         n_layers = 4
-        epochs = 30
+        epochs = 2
         
     elif dataset == "sepsis":
-        ms_proteins = pd.read_csv('data/ms/sepsis/QuantMatrixNoNA.csv', sep=",")['Protein']
+        ms_proteins = pd.read_csv('data/ms/sepsis/QuantMatrix.csv', sep=",")['Protein']
         ms_hierarchy = sepsis_ms_hierarchy
         weight = 100 / torch.Tensor([74,123]) # class weights
-        protein_matrix = 'data/ms/sepsis/QuantMatrixNoNA.csv'
+        protein_matrix = 'data/ms/sepsis/QuantMatrix.csv'
         design_matrix = 'data/ms/sepsis/inner_design_matrix.tsv'
         k_folds = 3
         n_layers = 4
-        epochs = 50
+        epochs = 20
         
     
     model = BINN(sparse=True,
@@ -227,13 +200,19 @@ if __name__ == '__main__':
                  scheduler = 'plateau', 
                  validate = False, 
                  weight = weight,
-                 ms_hierarchy = ms_hierarchy
+                 ms_hierarchy = ms_hierarchy,
+                 residual = True
                  )
-    model.report_layer_structure(verbose=True)
-    #k_fold(model, k_folds=k_folds, epochs = epochs, protein_matrix = protein_matrix, design_matrix = design_matrix,
-     #      plot=True, save=False, log_name=f"{dataset}_k_fold", dataset = dataset, save_prefix=f"{dataset}_NLayers_{n_layers}")
 
-    train_on_full_data(model,protein_matrix, design_matrix, save=True, epochs=epochs, save_prefix=f"{dataset}_full_data_train_{epochs}_epochs", impute=impute)
+    model.report_layer_structure(verbose=True)
+    # k_fold(model, k_folds=k_folds, epochs = epochs, protein_matrix = protein_matrix, design_matrix = design_matrix,
+    #       plot=True, save=False, log_name=f"residual_{dataset}_k_fold", dataset = dataset, save_prefix=f"residual_{dataset}_NLayers_{n_layers}")
+
+    train_on_full_data(model,protein_matrix, design_matrix, 
+                       save=True,
+                       epochs=epochs, 
+                       save_prefix=f"residual_{dataset}_full_data_train_{epochs}_epochs", 
+                       impute=impute)
     
     #weight_heatmap(model.layers, 'after_training_averaged_model', column_names =model.column_names, only_last=True)
     

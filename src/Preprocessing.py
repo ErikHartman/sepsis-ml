@@ -84,9 +84,18 @@ def prepare_sepsis_data(quantification_file =f"data/ms/sepsis/QuantMatrix.csv", 
     X_scaled = scaler.transform(X)
     return X_scaled, y, protein_labels
 
-def prepare_covid_data(quantification_file =f"data/ms/covid/AaronQM.tsv", design_matrix = f"data/ms/covid/design_cropped.tsv", group_column = 'group'):
+def prepare_covid_data(quantification_file =f"data/ms/covid/AaronQM.tsv", 
+                       design_matrix = f"data/ms/covid/design_cropped.tsv",
+                       group_column = 'group',
+                       reactome_file = f"data/reactome/UniProt2Reactome.txt"):
     df = pd.read_csv(quantification_file, sep="\t")
     design = pd.read_csv(design_matrix, sep = "\t")
+    reactome = pd.read_csv(reactome_file, index_col=False,
+                        names = ['UniProt_id', 'Reactome_id', 'URL', 'Description','Evidence Code','Species'], sep = "\t")
+    
+    proteins_in_reactome = reactome['UniProt_id'].unique()
+    df = df[df['Protein'].isin(proteins_in_reactome)]
+    print("Proteins in reactome: ", len(df.index))
     GroupOneCols = design[design[group_column] == 1]['sample']
     GroupTwoCols = design[design[group_column] == 2]['sample']
     protein_labels = df['Protein'].values
